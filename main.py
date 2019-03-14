@@ -1,5 +1,5 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io
+import pygame, sys, time, io, os
 from bs4 import BeautifulSoup
 
 """ URLLIB HEADER"""
@@ -47,7 +47,7 @@ EZTV: Just not a good selection
                     ----------------
 
 Feature List:
-    - ** Check if the MEDIA-SERVER pc is available **       possibly with os.path.exists(path_to_media_server)
+    - ** Check if the MEDIA-SERVER pc is available **                                                                   - DONE!
     - ** Next Check if PLEX is up and active **
     
     - At the start of the program, make sure the URLs are accessible since the websites change domains often
@@ -74,6 +74,8 @@ def check_statuses():
     # TODO: Secondary check for plex
     return pc, plex
 
+print(check_statuses())
+
 # Array of Movie objects
 movies = []
 
@@ -90,78 +92,97 @@ class Movie:
         self.image = pygame.transform.smoothscale(self.image, self.img_size)
 
 
-# Check to make sure the link is open
-# This is necessary in case the domain changes. Need to check all URLs are valid at start of program!
-try:
+def search_yify(name):
+    print("SEARCHING")
+    # Check to make sure the link is open
+    # This is necessary in case the domain changes. Need to check all URLs are valid at start of program!
+    # FIXME: This method is pretty slow and takes between 0.5s - 0.6s PER movie :( - Must make faster
+    movies = []
+    try:
+        start = time.clock()
+        req = Request(yify(str(name)), headers=hdr)
+        #req = Request(yify("the"), headers=hdr)
+        #req = Request(yify("transformers"), headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+    except:
+        print("That is an invalid URL")
+    else:
+        #print(soup.prettify())
+        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
+
+
+    raw_data = soup.findAll('div', class_="browse-movie-wrap")
     start = time.clock()
-    req = Request(yify("Alice in Wonderland"), headers=hdr)
-    #req = Request(yify("the"), headers=hdr)
-    #req = Request(yify("transformers"), headers=hdr)
-    html = urlopen(req)
-    soup = BeautifulSoup(html.read(), 'html.parser')
-except:
-    print("That is an invalid URL")
-else:
-    #print(soup.prettify())
-    print("Time to retrieve Page: %.2fs" %(time.clock() - start))
+    if len(raw_data) > 0:
+        # Limit the number of movies to load
+        if len(raw_data) > 12:
+            raw_data = raw_data[:12]
+        print (len(raw_data), "Results Found\n----------------")
+        for movie in raw_data:
+            movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
+            print(movie.find("img")['alt'][:-9])
+            # Link
+            print(movie.find("a")['href'])
+            # Picture
+            print(movie.find("img")['src'])
+            print()
 
-
-raw_data = soup.findAll('div', class_="browse-movie-wrap")
-start = time.clock()
-if len(raw_data) > 0:
-    # Limit the number of movies to load
-    if len(raw_data) > 12:
-        raw_data = raw_data[:12]
-    print (len(raw_data), "Results Found\n----------------")
-    for movie in raw_data:
-        movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
-        print(movie.find("img")['alt'][:-9])
-        # Link
-        print(movie.find("a")['href'])
-        # Picture
-        print(movie.find("img")['src'])
-        print()
-
-    print(time.clock() - start, '\nAvg per movie %.2fs' % ((time.clock() - start) / len(movies)))
-
-
-else:
-    print("No Movies Found")
+        print(time.clock() - start, '\nAvg per movie %.2fs' % ((time.clock() - start) / len(movies)))
+        return movies
+    else:
+        movies = [None]
+        print("No Movies Found")
+        return movies
 
 def show_movies():
     # NEED TO ADD MOVIE TITLES
-
     num_cols = 4
     top_padding = 120
-    for movie in range(len(movies)):
-        if movie < num_cols:
-            screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + movie * (movies[movie].img_size[0]+10), top_padding))
-        elif movie >= num_cols and movie < num_cols*2:
-            screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols) * (movies[movie].img_size[0]+10), top_padding + (movies[movie].img_size[1]+10)))
-        else:
-            screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+10), top_padding + 2*(movies[movie].img_size[1]+10)))
+    if movies[0] == None:
+        screen.fill(bg_color)
+        draw_header()
+        text = pygame.font.SysFont("Roboto", 72).render("No Movies Found", True, (240, 30, 15))
+        screen.blit(text, (((SCREEN_WIDTH - text.get_width())/2), 150))
+        del(movies[0])
+    else:
+        screen.fill(bg_color)
+        draw_header()
+        for movie in range(len(movies)):
+            if movie < num_cols:
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + movie * (movies[movie].img_size[0]+10), top_padding))
+            elif movie >= num_cols and movie < num_cols*2:
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols) * (movies[movie].img_size[0]+10), top_padding + (movies[movie].img_size[1]+10)))
+            else:
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+10), top_padding + 2*(movies[movie].img_size[1]+10)))
 
 
 class InputBox:
 
     def __init__(self, x, y, w, h, text=''):
-
         self.rect = pygame.Rect(x, y, w, h)
         self.color_inactive = (100,100,100)
         self.color_active = (200,200,200)
         self.text_color = (0,0,0)
         self.text = text
-        self.font = pygame.font.SysFont("Arial", 36)
+        self.font = pygame.font.SysFont("Times New Roman", 30)
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.active = False
+        self.movies = []
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             # If the user clicked on the input_box rect.
             if self.rect.collidepoint(event.pos):
                 # Toggle the active variable.
+                if not self.active and self.text == 'Search':
+                    self.text = ''
+                    self.txt_surface = self.font.render(self.text, True, self.text_color)
                 self.active = not self.active
             else:
+                if self.active and self.text == '':
+                    self.text = 'Search'
+                    self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                 self.active = False
             # Change the current color of the input box.
             self.color = self.color_active if self.active else self.color_inactive
@@ -169,18 +190,18 @@ class InputBox:
             if self.active:
                 if event.key == pygame.K_RETURN:
                     print(self.text)
+                    self.movies = search_yify(self.text)
                     self.text = ''
+                    self.active = False
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
-                    self.text += event.unicode
+                    if self.txt_surface.get_width() < self.rect.w-30:
+                        self.text += event.unicode
                 # Re-render the text.
                 self.txt_surface = self.font.render(self.text, True, self.text_color)
-
-    def update(self):
-        # Resize the box if the text is too long.
-        width = max(200, self.txt_surface.get_width()+10)
-        self.rect.w = width
+        if self.movies:
+            return self.movies
 
     def draw(self, screen):
         # Blit the rect.
@@ -190,27 +211,24 @@ class InputBox:
         else:
             pygame.draw.rect(screen, (245, 245, 245), self.rect, 0)
 
-        # Blit the text.
-        screen.blit(self.txt_surface, (self.rect.x + 5, self.rect.y + 5))
+        # Blit the text. Now centered vertically
+        screen.blit(self.txt_surface, (self.rect.x + 5, (self.rect.y + (self.rect.h - self.txt_surface.get_height())/2)))
 
-
-textInput = InputBox(5,5,SCREEN_WIDTH/1.2,40, "Search" )
+textInput = InputBox(10,10,SCREEN_WIDTH/1.2,35, "Search" )
 def draw_header():
     pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
     #pygame.draw.rect(screen, (220, 220, 220), (5, 5, SCREEN_WIDTH/1.2, 40))
     textInput.draw(screen)
-    textInput.update()
 
 running = True
 while running:
-
     if movies:
         show_movies()
 
     draw_header()
     clock.tick(FPS)
     for event in pygame.event.get():
-        textInput.handle_event(event)
+        movies = textInput.handle_event(event)
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
