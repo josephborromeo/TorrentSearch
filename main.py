@@ -1,6 +1,8 @@
 from urllib.request import urlopen, Request
 import pygame, sys, time, io
 from bs4 import BeautifulSoup
+import pygame_functions
+# pygame_functions taken from https://github.com/StevePaget/Pygame_Functions
 
 """ URLLIB HEADER"""
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -88,7 +90,7 @@ try:
     start = time.clock()
     #req = Request(yify("Alice in Wonderland"), headers=hdr)
     #req = Request(yify("the"), headers=hdr)
-    req = Request(yify("Games"), headers=hdr)
+    req = Request(yify("cars"), headers=hdr)
     html = urlopen(req)
     soup = BeautifulSoup(html.read(), 'html.parser')
 except:
@@ -121,6 +123,8 @@ else:
     print("No Movies Found")
 
 def show_movies():
+    # NEED TO ADD MOVIE TITLES
+
     num_cols = 4
     top_padding = 120
     for movie in range(len(movies)):
@@ -131,12 +135,19 @@ def show_movies():
         else:
             screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+10), top_padding + 2*(movies[movie].img_size[1]+10)))
 
+def draw_header():
+    pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
+
+    textInput = pygame_functions.makeTextBox(5, 5, SCREEN_WIDTH-450)
+    pygame_functions.showTextBox(textInput)
+
 running = True
 while running:
-    pygame.draw.rect(screen, (40,40,40), (0,0,SCREEN_WIDTH,80))
+
     if movies:
         show_movies()
 
+    draw_header()
     clock.tick(FPS)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
