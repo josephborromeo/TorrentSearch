@@ -1,5 +1,5 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os
+import pygame, sys, time, io, os, textwrap
 from bs4 import BeautifulSoup
 from pygame import gfxdraw
 
@@ -9,7 +9,10 @@ hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML,
        'Connection': 'keep-alive'}
 
 """ PYGAME SETTINGS """
-#Initializes the Clock
+
+# Center Window in display
+os.environ['SDL_VIDEO_CENTERED'] = '1'
+
 clock = pygame.time.Clock()
 FPS = 60
 
@@ -25,11 +28,10 @@ pygame.key.set_repeat(500, 35)
 pygame.display.set_caption("Torrent Search")
 # Draws all changes to the window
 
-
+# TODO: Probably move scrapers into a seperate file
 """
                         WEBSITES
-                    ----------------
-
+                    ---------------- 
 Movies
 -------
 YIFY: https://yts.am/browse-movies/Search%20term%20here/all/all/0/latest        # Spaces = %20
@@ -67,15 +69,23 @@ YIFY:
     - Resolution selector when downloading
 """
 
+# TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc
+
+# Path to local server's main HDD
+path_to_server = "//MEDIA-SERVER/E"
+movie_path = "Movies"   #FIXME: Change to proper paths
+tv_path = "Tv Shows"
+
+
 """     STATUS CHECKS       """
 def check_statuses():
     pc, plex = False, False
-    if os.path.exists("//MEDIA-SERVER/E"):
+    if os.path.exists(path_to_server):
         pc = True
-    # TODO: Secondary check for plex
+    # TODO: implement check for plex
     return pc, plex
 
-print(check_statuses())
+#print(check_statuses())
 
 # Array of Movie objects
 movies = []
@@ -88,7 +98,7 @@ class Movie:
         self.name = name
         self.link = link
         self.image = pygame.image.load(io.BytesIO(urlopen(img_link).read()))
-        self.img_size = (160, 240)
+        self.img_size = (190, 285)
         # Default image size is 230 x 345, Change it to 150 x 225
         self.image = pygame.transform.smoothscale(self.image, self.img_size)
 
@@ -102,24 +112,23 @@ def search_yify(name):
     try:
         start = time.clock()
         req = Request(yify(str(name)), headers=hdr)
-        #req = Request(yify("the"), headers=hdr)
-        #req = Request(yify("transformers"), headers=hdr)
+        # req = Request(yify("the"), headers=hdr)
+        # req = Request(yify("transformers"), headers=hdr)
         html = urlopen(req)
         soup = BeautifulSoup(html.read(), 'html.parser')
     except:
         print("That is an invalid URL")
     else:
-        #print(soup.prettify())
+        # print(soup.prettify())
         print("Time to retrieve Page: %.2fs" %(time.clock() - start))
-
 
     raw_data = soup.findAll('div', class_="browse-movie-wrap")
     start = time.clock()
     if len(raw_data) > 0:
+        print(len(raw_data), "Results Found\n----------------")
         # Limit the number of movies to load
-        if len(raw_data) > 12:
-            raw_data = raw_data[:12]
-        print (len(raw_data), "Results Found\n----------------")
+        if len(raw_data) > 6:
+            raw_data = raw_data[:6]
         for movie in raw_data:
             movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
             print(movie.find("img")['alt'][:-9])
@@ -137,22 +146,41 @@ def search_yify(name):
         return movies
 
 def show_movies():
-    # NEED TO ADD MOVIE TITLES
-    num_cols = 4
-    top_padding = 120
-    if movies[0] == None:
+    # TODO: Add option for multiple screens, can just keep the whole array and then pick which section we are looking at
+    num_cols = 3
+    top_padding = 100
+    inter_padding = 100
+    font = pygame.font.SysFont("Roboto", 22)
+    char_lim = 18
+    text_spacing = 5
+    if movies[0] is None:
         clear_movies()
         del(movies[0])
     else:
         screen.fill(bg_color)
         draw_header()
         for movie in range(len(movies)):
+            name = movies[movie].name
+            name = textwrap.fill(name, char_lim)
+            name = name.split("\n")
+            text_list = []
+            for word in range(len(name)):
+                text = font.render(name[word], True, (0, 0, 0))
+                text_list.append(text)
+
             if movie < num_cols:
-                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + movie * (movies[movie].img_size[0]+10), top_padding))
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding), top_padding))
+                for word in range(len(text_list)):
+                    screen.blit(text_list[word], (((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding)) + (movies[movie].img_size[0] - text_list[word].get_width())/2, top_padding + movies[movie].img_size[1] + (text_list[word].get_height()-text_spacing)* word))
+
             elif movie >= num_cols and movie < num_cols*2:
-                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols) * (movies[movie].img_size[0]+10), top_padding + (movies[movie].img_size[1]+10)))
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding), top_padding + (movies[movie].img_size[1]+inter_padding)))
+                for word in range(len(text_list)):
+                    screen.blit(text_list[word], (((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding)) + (movies[movie].img_size[0] - text_list[word].get_width())/2, top_padding + movies[movie].img_size[1]*2 + inter_padding + (text_list[word].get_height()-text_spacing)* word))
             else:
-                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+10), top_padding + 2*(movies[movie].img_size[1]+10)))
+                screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+inter_padding), top_padding + 2*(movies[movie].img_size[1]+inter_padding)))
+                # text = font.render(movies[movie].name, True, (0, 0, 0))
+
 
 def clear_movies():
     screen.fill(bg_color)
@@ -160,8 +188,9 @@ def clear_movies():
     text = pygame.font.SysFont("Roboto", 72).render("No Movies Found", True, (240, 30, 15))
     screen.blit(text, (((SCREEN_WIDTH - text.get_width()) / 2), 150))
 
-class InputBox:
 
+class InputBox:
+    # TODO: Add cursor support to edit parts of the input
     def __init__(self, x, y, w, h, text=''):
         self.rect = pygame.Rect(x, y, w, h)
         self.color_inactive = (100,100,100)
@@ -217,6 +246,7 @@ class InputBox:
         # Blit the text. Now centered vertically
         screen.blit(self.txt_surface, (self.rect.x + 5, (self.rect.y + (self.rect.h - self.txt_surface.get_height())/2)))
 
+
 class CheckBox:
     def __init__(self, x, y, desc=''):
         self.size = 20
@@ -255,21 +285,25 @@ class CheckBox:
 
 
 def movie_preview():
-    #TODO: Write function to display the full size thumbnail, description, and download options
+    #  TODO: Write function to display the full size thumbnail, description, and download options
     # TODO: Extra features will include relevant movies and such
     pass
+
 
 textInput = InputBox(10,10,SCREEN_WIDTH/1.2,35, "Search" )
 def draw_header():
     pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
-    #pygame.draw.rect(screen, (220, 220, 220), (5, 5, SCREEN_WIDTH/1.2, 40))
+    # pygame.draw.rect(screen, (220, 220, 220), (5, 5, SCREEN_WIDTH/1.2, 40))
     textInput.draw(screen)
 
 
-extensive_search = CheckBox(50, 50, "Extensive Search")
+extensive_search = CheckBox(10, 52, "Extensive Search")
+
+
 def user_buttons():
     pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2)+ 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
     extensive_search.draw()
+
 
 running = True
 while running:
