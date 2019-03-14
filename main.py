@@ -1,6 +1,7 @@
 from urllib.request import urlopen, Request
 import pygame, sys, time, io, os
 from bs4 import BeautifulSoup
+from pygame import gfxdraw
 
 """ URLLIB HEADER"""
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -39,7 +40,7 @@ Movies and TV shows
 TPB: https://thepiratebay.org/search/Search%20term%20here
 RAR: http://rarbg.to/torrents.php?search=search+term+here
 
-    --- Not using KAT since you cannot eaily dl magnet link ---
+    --- Not using KAT since you cannot easily dl magnet link ---
 KAT: https://kat2.biz/usearch/search%20term/
 EZTV: Just not a good selection
 
@@ -140,10 +141,7 @@ def show_movies():
     num_cols = 4
     top_padding = 120
     if movies[0] == None:
-        screen.fill(bg_color)
-        draw_header()
-        text = pygame.font.SysFont("Roboto", 72).render("No Movies Found", True, (240, 30, 15))
-        screen.blit(text, (((SCREEN_WIDTH - text.get_width())/2), 150))
+        clear_movies()
         del(movies[0])
     else:
         screen.fill(bg_color)
@@ -156,6 +154,11 @@ def show_movies():
             else:
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+10)* num_cols))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+10), top_padding + 2*(movies[movie].img_size[1]+10)))
 
+def clear_movies():
+    screen.fill(bg_color)
+    draw_header()
+    text = pygame.font.SysFont("Roboto", 72).render("No Movies Found", True, (240, 30, 15))
+    screen.blit(text, (((SCREEN_WIDTH - text.get_width()) / 2), 150))
 
 class InputBox:
 
@@ -165,7 +168,7 @@ class InputBox:
         self.color_active = (200,200,200)
         self.text_color = (0,0,0)
         self.text = text
-        self.font = pygame.font.SysFont("Times New Roman", 30)
+        self.font = pygame.font.SysFont("Roboto", 26)
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.active = False
         self.movies = []
@@ -214,11 +217,59 @@ class InputBox:
         # Blit the text. Now centered vertically
         screen.blit(self.txt_surface, (self.rect.x + 5, (self.rect.y + (self.rect.h - self.txt_surface.get_height())/2)))
 
+class CheckBox:
+    def __init__(self, x, y, desc=''):
+        self.size = 20
+        self.label = desc
+        self.font = pygame.font.SysFont("Roboto", 16)
+        self.active = False
+        self.inactive_color = (240, 240, 240)
+        self.border_color = (120, 120, 120)
+        self.rect = pygame.Rect(x, y, self.size, self.size)
+        self.timer = 0
+        self.threshhold = 0.4
+
+        if self.label != '':
+            self.text = self.font.render(self.label, True, self.inactive_color)
+
+    def draw(self):
+        # Will handle drawing and toggle logic so only one call is needed for each object
+
+        # TODO: Fix the toggling if the mouse is geld down. Probably have to use events
+        if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
+            self.active = not self.active
+            self.timer = time.clock()
+
+        if not self.active:
+            pygame.draw.rect(screen, self.inactive_color, self.rect)
+            pygame.draw.rect(screen, self.border_color, self.rect, 2)
+        else:
+            pygame.draw.rect(screen, self.inactive_color, self.rect)
+            pygame.draw.aaline(screen, (0,0,0), (self.rect.x, self.rect.y), (self.rect.x + self.size-1, self.rect.y + self.size-1))
+            pygame.draw.aaline(screen, (0, 0, 0), (self.rect.x, self.rect.y + self.size-1),(self.rect.x + self.size-1, self.rect.y))
+            pygame.draw.rect(screen, self.border_color, self.rect, 2)
+
+
+        if self.label != '':
+            screen.blit(self.text, (self.rect.x + self.size + 5, self.rect.y + (self.size - self.text.get_height())/2))
+
+
+def movie_preview():
+    #TODO: Write function to display the full size thumbnail, description, and download options
+    # TODO: Extra features will include relevant movies and such
+    pass
+
 textInput = InputBox(10,10,SCREEN_WIDTH/1.2,35, "Search" )
 def draw_header():
     pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
     #pygame.draw.rect(screen, (220, 220, 220), (5, 5, SCREEN_WIDTH/1.2, 40))
     textInput.draw(screen)
+
+
+extensive_search = CheckBox(50, 50, "Extensive Search")
+def user_buttons():
+    pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2)+ 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
+    extensive_search.draw()
 
 running = True
 while running:
@@ -226,6 +277,8 @@ while running:
         show_movies()
 
     draw_header()
+    user_buttons()
+
     clock.tick(FPS)
     for event in pygame.event.get():
         movies = textInput.handle_event(event)
