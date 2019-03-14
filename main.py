@@ -60,7 +60,7 @@ Feature List:
     - Auto-format TV show search terms (e.g. S__E__)
     - Automatically set download path when choosing to search for either a Movie of TV Show
     
-    - Websites other than YIFY, show: Description, File Size, Seeders
+    - Websites other than YIFY, show: Description, File Size, Seeders   - basically a list view
         - Have a checkbox to choose "extensive search" to check other websites
 
 Site Specific Features
@@ -94,20 +94,26 @@ movies = []
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
 
 class Movie:
-    def __init__(self, name, link, img_link):
+    def __init__(self, name, link, img_link = ''):
         self.name = name
         self.link = link
-        self.image = pygame.image.load(io.BytesIO(urlopen(img_link).read()))
         self.img_size = (190, 285)
-        # Default image size is 230 x 345, Change it to 150 x 225
-        self.image = pygame.transform.smoothscale(self.image, self.img_size)
+        self.image = pygame.Surface(self.img_size)
+        self.image.fill(bg_color)
+        pygame.draw.rect(self.image, (180,180,240), (0,0,self.img_size[0], self.img_size[1]))
+        pygame.draw.rect(self.image, (20,20,200), (0,0,self.img_size[0], self.img_size[1]), 5)
+        if img_link != '':
+            self.image = pygame.image.load(io.BytesIO(urlopen(img_link).read()))
+            # Default image size is 230 x 345, Change it to 150 x 225
+            self.image = pygame.transform.smoothscale(self.image, self.img_size)
 
 
 def search_yify(name):
     print("SEARCHING")
     # Check to make sure the link is open
     # This is necessary in case the domain changes. Need to check all URLs are valid at start of program!
-    # FIXME: This method is pretty slow and takes between 0.5s - 0.6s PER movie :( - Must make faster
+    # FIXME: This method is pretty slow and takes between 0.5s - 0.6s PER movie :( - Speed reduction is due to downloading images
+    # TODO: Parallelize image loading so it only take ~0.6 sec
     movies = []
     try:
         start = time.clock()
@@ -115,7 +121,9 @@ def search_yify(name):
         # req = Request(yify("the"), headers=hdr)
         # req = Request(yify("transformers"), headers=hdr)
         html = urlopen(req)
+        print("Time to retrieve Page: %.2fs" % (time.clock() - start))
         soup = BeautifulSoup(html.read(), 'html.parser')
+        print("Time to retrieve Page: %.2fs" % (time.clock() - start))
     except:
         print("That is an invalid URL")
     else:
@@ -130,15 +138,18 @@ def search_yify(name):
         if len(raw_data) > 6:
             raw_data = raw_data[:6]
         for movie in raw_data:
-            movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
-            print(movie.find("img")['alt'][:-9])
-            # Link
-            print(movie.find("a")['href'])
-            # Picture
-            print(movie.find("img")['src'])
-            print()
+            if not fast_search.active:
+                movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
+                print(movie.find("img")['alt'][:-9])
+                # Link
+                print(movie.find("a")['href'])
+                # Picture
+                print(movie.find("img")['src'])
+                print()
+            else:
+                movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href']))
 
-        print(time.clock() - start, '\nAvg per movie %.2fs' % ((time.clock() - start) / len(movies)))
+        print("Total Time to parse movies: %.2fs\nAvg per movie %.2fs"% (time.clock() - start , ((time.clock() - start) / len(movies))))
         return movies
     else:
         movies = [None]
@@ -151,7 +162,7 @@ def show_movies():
     top_padding = 100
     inter_padding = 100
     font = pygame.font.SysFont("Roboto", 22)
-    char_lim = 18
+    char_lim = 20
     text_spacing = 5
     if movies[0] is None:
         clear_movies()
@@ -223,7 +234,8 @@ class InputBox:
                 if event.key == pygame.K_RETURN:
                     print(self.text)
                     self.movies = search_yify(self.text)
-                    self.text = ''
+                    self.text = 'Search'
+                    self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                     self.active = False
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
@@ -231,7 +243,8 @@ class InputBox:
                     if self.txt_surface.get_width() < self.rect.w-30:
                         self.text += event.unicode
                 # Re-render the text.
-                self.txt_surface = self.font.render(self.text, True, self.text_color)
+                if self.active:
+                    self.txt_surface = self.font.render(self.text, True, self.text_color)
         if self.movies:
             return self.movies
 
@@ -285,7 +298,7 @@ class CheckBox:
 
 
 def movie_preview():
-    #  TODO: Write function to display the full size thumbnail, description, and download options
+    # TODO: Write function to display the full size thumbnail, description, and download options
     # TODO: Extra features will include relevant movies and such
     pass
 
@@ -298,11 +311,13 @@ def draw_header():
 
 
 extensive_search = CheckBox(10, 52, "Extensive Search")
+fast_search = CheckBox(250, 52, "Fast Search")
 
 
 def user_buttons():
     pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2)+ 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
     extensive_search.draw()
+    fast_search.draw()
 
 
 running = True
