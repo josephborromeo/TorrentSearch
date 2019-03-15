@@ -38,7 +38,6 @@ Movies
 -------
 YIFY: https://yts.am/browse-movies/Search%20term%20here/all/all/0/latest        # Spaces = %20
 
-
 Movies and TV shows
 -------------------
 TPB: https://thepiratebay.org/search/Search%20term%20here
@@ -50,8 +49,6 @@ EZTV: Just not a good selection
 
                         FEATURES
                     ----------------
-
-Feature List:
     - ** Check if the MEDIA-SERVER pc is available **                                                                   - DONE!
     - ** Next Check if PLEX is up and active **
     
@@ -64,11 +61,10 @@ Feature List:
     
     - Websites other than YIFY, show: Description, File Size, Seeders   - basically a list view
         - Have a checkbox to choose "extensive search" to check other websites
-
 Site Specific Features
 -----------------------
 YIFY:
-    - Resolution selector when downloading
+    - Resolution selector when downloading                                                                              - DONE!
 """
 
 # TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc
@@ -184,6 +180,7 @@ def show_movies():
     font = pygame.font.SysFont(gui_font, 22)
     char_lim = 20
     text_spacing = 3
+    start = 0
     if movies[0] is None:
         clear_movies()
         del(movies[0])
@@ -204,10 +201,10 @@ def show_movies():
                 # Click Detection
                 if pos[0] > ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding)) and pos[0] < (SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding) + movies[movie].img_size[0]:
                     if pos[1] > top_padding and pos[1] < top_padding + movies[movie].img_size[1]:
-                        if pygame.mouse.get_pressed()[0]:
+                        if pygame.mouse.get_pressed()[0] and time.clock()-start > 0.5:
                             print(movies[movie].name)
-                            time.sleep(0.05)
                             movie_preview(movies[movie])
+                            start = time.clock()
 
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding), top_padding))
                 for word in range(len(text_list)):
@@ -217,10 +214,10 @@ def show_movies():
                 # Click Detection
                 if pos[0] > ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding)) and pos[0] < ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding) + movies[movie].img_size[0]):
                     if pos[1] > top_padding + (movies[movie].img_size[1]+inter_padding) and pos [1] < top_padding + (movies[movie].img_size[1]+inter_padding) + movies[movie].img_size[1]:
-                        if pygame.mouse.get_pressed()[0]:
+                        if pygame.mouse.get_pressed()[0] and time.clock()-start > 0.5:
                             print(movies[movie].name)
-                            time.sleep(0.05)
                             movie_preview(movies[movie])
+                            start = time.clock()
 
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding), top_padding + (movies[movie].img_size[1]+inter_padding)))
                 for word in range(len(text_list)):
@@ -404,6 +401,7 @@ def get_yify_data(movie):
     # TODO: Write scraper to scrape the movie page and look for Download links, descriptions, rationgs, etc
     link = movie.link
     resolutions, magnets = [], []
+    description = ''
     try:
         start = time.clock()
         req = Request(link, headers=hdr)
@@ -428,15 +426,22 @@ def get_yify_data(movie):
             data = data.get('href')
             if "magnet" in data:
                 magnets.append(data)
-
         print("Magnets Found:", len(magnets), resolutions)
 
-    return resolutions, magnets
+        description = soup.find('p', class_="hidden-sm hidden-md hidden-lg").text[1:]
+
+
+
+        #TODO: Ratings Parser
+
+
+
+    return resolutions, magnets, description
 
 
 def movie_preview(movie):
     running = True
-    resolutions, links = get_yify_data(movie)
+    resolutions, links, description = get_yify_data(movie)
 
     if len(resolutions) != len(links):
         print("SOMETHING IS WRONG \n RESOLUTIONS DO NOT MATCH LINKS")
@@ -445,8 +450,12 @@ def movie_preview(movie):
     image = pygame.transform.smoothscale(movie.image, size)
     font = pygame.font.SysFont(gui_font, 46)
     dl_font = pygame.font.SysFont(gui_font, 32)
+    desc_font = pygame.font.SysFont(gui_font, 22)
+    synopsis_font = pygame.font.SysFont(gui_font + " Bold", 34)
+    synopsis_text = synopsis_font.render("Synopsis", True, (20, 20, 20))
     movie_name = font.render(movie.name, True, (40,40,40))
     back = font.render("Back", True, (40,40,40))
+    start = time.clock()
     while running:
         screen.fill(bg_color)
         screen.blit(movie_name, ((SCREEN_WIDTH - movie_name.get_width())/2, 10))
@@ -455,9 +464,39 @@ def movie_preview(movie):
         pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
         screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 70 + (50 - back.get_height())/2))
 
+
+        # Display Links
+        for download in range(len(resolutions)):
+            dl_res = dl_font.render(resolutions[download], True, (220,220,220))
+            pos_rect = pygame.Rect(SCREEN_WIDTH/2 - dl_res.get_width()/2 - 10, (movie_name.get_height() + 20 + (size[1] - 43*(len(resolutions))-10)/2) + 60 * download, dl_res.get_width()+20, dl_res.get_height()+10)
+            pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x -2, pos_rect.y - 2, pos_rect.w+4, pos_rect.h+4))
+            pygame.draw.rect(screen, (40, 40, 40), pos_rect)
+            screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width())/2 , pos_rect.y + (pos_rect.h - dl_res.get_height())/2))
+
+            pos = pygame.mouse.get_pos()
+            if pos[0] > pos_rect.x and pos[0] < pos_rect.x + pos_rect.w:
+                if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
+                    if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
+                        print(resolutions[download], links[download])
+                        # TODO: Enable Downloading, then automatically exit
+                        running = False
+
+
+        desc_text = textwrap.fill(description, 95)
+        desc_text = desc_text.split("\n")
+        #FIXME Wall-e text gets cut off
+        screen.blit(synopsis_text, (30,movie_name.get_height() + 45 + size[1] ))
+        for line in range(len(desc_text)):
+            text = desc_font.render(desc_text[line], True, (30,30,30))
+            screen.blit(text, (30, movie_name.get_height() + 75 + size[1] + 22*line))
+
+
+        #TODO: Display Ratings, add icons
+
+        # Back Button
         pos = pygame.mouse.get_pos()
-        if pos[0] > SCREEN_WIDTH - 160 and pos [0] < SCREEN_WIDTH - 20:
-            if pos [1] > SCREEN_HEIGHT - 70 and pos[1] < SCREEN_HEIGHT - 20:
+        if pos[0] > SCREEN_WIDTH - 160 and pos[0] < SCREEN_WIDTH - 20:
+            if pos[1] > SCREEN_HEIGHT - 70 and pos[1] < SCREEN_HEIGHT - 20:
                 if pygame.mouse.get_pressed()[0]:
                     time.sleep(0.05)
                     running = False
@@ -465,15 +504,6 @@ def movie_preview(movie):
         if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
             time.sleep(0.05)
             running = False
-
-        for download in range(len(resolutions)):
-            dl_res = dl_font.render(resolutions[download], True, (220,220,220))
-            pos_rect = pygame.Rect(SCREEN_WIDTH/2 - dl_res.get_width()/2 - 10, (movie_name.get_height() + 20 + (size[1] - 43*(len(resolutions)))/2) + 60 * download, dl_res.get_width()+20, dl_res.get_height()+10)
-            pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x -2, pos_rect.y - 2, pos_rect.w+4, pos_rect.h+4))
-            pygame.draw.rect(screen, (40, 40, 40), pos_rect)
-            screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width())/2 , pos_rect.y + (pos_rect.h - dl_res.get_height())/2))
-
-        #TODO: Click detection for links
 
 
         clock.tick(FPS)
@@ -483,7 +513,7 @@ def movie_preview(movie):
                 sys.exit()
         pygame.display.update()
     # TODO: Extra features will include relevant movies and such
-
+    time.sleep(0.1)
 
 textInput = InputBox(10, 10, SCREEN_WIDTH/1.2, 35, "Search")
 def draw_header():
