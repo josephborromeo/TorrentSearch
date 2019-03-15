@@ -199,18 +199,34 @@ def show_movies():
                 text = font.render(name[word], True, (0, 0, 0))
                 text_list.append(text)
 
+            pos = pygame.mouse.get_pos()
             if movie < num_cols:
+                # Click Detection
+                if pos[0] > ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding)) and pos[0] < (SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding) + movies[movie].img_size[0]:
+                    if pos[1] > top_padding and pos[1] < top_padding + movies[movie].img_size[1]:
+                        if pygame.mouse.get_pressed()[0]:
+                            print(movies[movie].name)
+                            # FIXME: Change screens here, remove sleep
+                            time.sleep(0.2)
+
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding), top_padding))
                 for word in range(len(text_list)):
                     screen.blit(text_list[word], (((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding)) + (movies[movie].img_size[0] - text_list[word].get_width())/2, top_padding + movies[movie].img_size[1] + (text_list[word].get_height()-text_spacing)* word))
 
             elif movie >= num_cols and movie < num_cols*2:
+                # Click Detection
+                if pos[0] > ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding)) and pos[0] < ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding) + movies[movie].img_size[0]):
+                    if pos[1] > top_padding + (movies[movie].img_size[1]+inter_padding) and pos [1] < top_padding + (movies[movie].img_size[1]+inter_padding) + movies[movie].img_size[1]:
+                        if pygame.mouse.get_pressed()[0]:
+                            print(movies[movie].name)
+                            # FIXME: Change screens here, remove sleep
+                            time.sleep(0.2)
+
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding), top_padding + (movies[movie].img_size[1]+inter_padding)))
                 for word in range(len(text_list)):
                     screen.blit(text_list[word], (((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding)) + (movies[movie].img_size[0] - text_list[word].get_width())/2, top_padding + movies[movie].img_size[1]*2 + inter_padding + (text_list[word].get_height()-text_spacing)* word))
             else:
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+inter_padding), top_padding + 2*(movies[movie].img_size[1]+inter_padding)))
-                # text = font.render(movies[movie].name, True, (0, 0, 0))
 
 
 def clear_movies():
@@ -383,7 +399,12 @@ class ModeSelector():
         screen.blit(self.movie_text, (self.x + (self.width - self.movie_text.get_width())/2 , self.y + (self.height - self.movie_text.get_height())))
         screen.blit(self.tv_text, (self.x + self.width + (self.width - self.tv_text.get_width()) / 2, self.y + (self.height - self.tv_text.get_height())))
 
-def movie_preview():
+
+def get_yify_data(movie):
+    # TODO: Write scraper to scrape the movie page and look for Download links, descriptions, rationgs, etc
+    pass
+
+def movie_preview(movie):
     # TODO: Write function to display the full size thumbnail, description, and download options
     # TODO: Extra features will include relevant movies and such
     pass
