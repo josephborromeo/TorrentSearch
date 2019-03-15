@@ -31,6 +31,7 @@ pygame.display.set_caption("Torrent Search")
 # Draws all changes to the window
 
 # TODO: Probably move scrapers into a separate file
+# TODO: Add in reset button for computer
 """
                         WEBSITES
                     ---------------- 
@@ -398,6 +399,7 @@ class ModeSelector():
 
 
 def get_yify_data(movie):
+
     link = movie.link
     resolutions, magnets = [], []
     description = ''
@@ -440,25 +442,22 @@ def get_yify_data(movie):
             ratings[rate] = ratings[rate].replace('\n', '')
             ratings[rate] = ratings[rate].replace(' ', '')
 
-        ratings = ratings[:4]
-        rating_1 = ''
-        rating_2 = ''
-        rating_3 = ''
-        for char in ratings[1]:
-            rating_1 += char
-            if char == "%":
-                break
-        for char in ratings[2]:
-            rating_2 += char
-            if char == "%":
-                break
-        for char in range(len(ratings[3])):
-            rating_3 += ratings[3][char]
-            if ratings[3][char] == ".":
-                rating_3 += ratings[3][char+1]
-                break
 
-        ratings[1], ratings[2], ratings[3] = rating_1, rating_2, rating_3
+        print(ratings)
+        ratings = ratings[:-1]
+        temp = ''
+        for rating in range(1,len(ratings)):
+            temp = ''
+            for char in range(len(ratings[rating])):
+                temp += ratings[rating][char]
+                if ratings[rating][char] == "%":
+                    ratings[rating] = temp
+                    break
+                if ratings[rating][char] == ".":
+                    temp += ratings[rating][char + 1]
+                    ratings[rating] = temp
+                    break
+
 
         print(ratings)
 
