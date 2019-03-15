@@ -83,7 +83,7 @@ def check_statuses():
     pc, plex = False, False
     if os.path.exists(path_to_server):
         pc = True
-    # TODO: implement check for plex
+    # TODO: implement check for plex server status
     return pc, plex
 #print("STATUS:",check_statuses())
 
@@ -206,8 +206,8 @@ def show_movies():
                     if pos[1] > top_padding and pos[1] < top_padding + movies[movie].img_size[1]:
                         if pygame.mouse.get_pressed()[0]:
                             print(movies[movie].name)
-                            # FIXME: Change screens here, remove sleep
-                            time.sleep(0.2)
+                            time.sleep(0.05)
+                            movie_preview(movies[movie])
 
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + movie * (movies[movie].img_size[0]+inter_padding), top_padding))
                 for word in range(len(text_list)):
@@ -219,8 +219,8 @@ def show_movies():
                     if pos[1] > top_padding + (movies[movie].img_size[1]+inter_padding) and pos [1] < top_padding + (movies[movie].img_size[1]+inter_padding) + movies[movie].img_size[1]:
                         if pygame.mouse.get_pressed()[0]:
                             print(movies[movie].name)
-                            # FIXME: Change screens here, remove sleep
-                            time.sleep(0.2)
+                            time.sleep(0.05)
+                            movie_preview(movies[movie])
 
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols) * (movies[movie].img_size[0]+inter_padding), top_padding + (movies[movie].img_size[1]+inter_padding)))
                 for word in range(len(text_list)):
@@ -402,12 +402,76 @@ class ModeSelector():
 
 def get_yify_data(movie):
     # TODO: Write scraper to scrape the movie page and look for Download links, descriptions, rationgs, etc
-    pass
+    link = movie.link
+    resolutions, magnets = [], []
+    try:
+        start = time.clock()
+        req = Request(link, headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+    except:
+        print("Unable to get Movie Data")
+    else:
+        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
+
+        # Parse Resolutions
+        raw_resolutions = soup.findAll('p', class_="hidden-md hidden-lg")
+        resolutions = raw_resolutions[0].text.split("\n")
+        while '' in resolutions:
+            resolutions.remove('')
+        for i in range(len(resolutions)):
+            resolutions[i] = resolutions[i].replace(".", " ")
+
+        # Parse magnet links
+        raw_magnets = soup.findAll('a')
+        for data in raw_magnets:
+            data = data.get('href')
+            if "magnet" in data:
+                magnets.append(data)
+
+        print("Magnets Found:", len(magnets), resolutions)
+
+    return resolutions, magnets
+
 
 def movie_preview(movie):
+    running = True
+    movie_data = get_yify_data(movie)
+    size = (int(movie.img_size[0]*1.2), int(movie.img_size[1]*1.2))
+    image = pygame.transform.smoothscale(movie.image, size)
+    font = pygame.font.SysFont(gui_font, 36)
+    movie_name = font.render(movie.name, True, (40,40,40))
+    back = font.render("Back", True, (40,40,40))
+    while running:
+        screen.fill(bg_color)
+        screen.blit(movie_name, ((SCREEN_WIDTH - movie_name.get_width())/2, 10))
+        screen.blit(image, (30,movie_name.get_height() + 20))
+
+        pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
+        screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 70 + (50 - back.get_height())/2))
+
+        pos = pygame.mouse.get_pos()
+        if pos[0] > SCREEN_WIDTH - 160 and pos [0] < SCREEN_WIDTH - 20:
+            if pos [1] > SCREEN_HEIGHT - 70 and pos[1] < SCREEN_HEIGHT - 20:
+                if pygame.mouse.get_pressed()[0]:
+                    time.sleep(0.05)
+                    running = False
+
+        if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            time.sleep(0.05)
+            running = False
+
+
+        # TODO: Display Download links
+
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+        pygame.display.update()
     # TODO: Write function to display the full size thumbnail, description, and download options
     # TODO: Extra features will include relevant movies and such
-    pass
 
 
 textInput = InputBox(10, 10, SCREEN_WIDTH/1.2, 35, "Search")
