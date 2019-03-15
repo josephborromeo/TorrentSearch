@@ -398,10 +398,12 @@ class ModeSelector():
 
 
 def get_yify_data(movie):
-    # TODO: Write scraper to scrape the movie page and look for Download links, descriptions, rationgs, etc
     link = movie.link
     resolutions, magnets = [], []
     description = ''
+    # [likes, RT Critics, RT Audience, IMDB]
+    ratings = []
+
     try:
         start = time.clock()
         req = Request(link, headers=hdr)
@@ -430,18 +432,42 @@ def get_yify_data(movie):
 
         description = soup.find('p', class_="hidden-sm hidden-md hidden-lg").text[1:]
 
+        raw_ratings = soup.findAll('div', class_="rating-row")
+        ratings = []
+        for rating in raw_ratings:
+            ratings.append(rating.text)
+        for rate in range(len(ratings)):
+            ratings[rate] = ratings[rate].replace('\n', '')
+            ratings[rate] = ratings[rate].replace(' ', '')
 
+        ratings = ratings[:4]
+        rating_1 = ''
+        rating_2 = ''
+        rating_3 = ''
+        for char in ratings[1]:
+            rating_1 += char
+            if char == "%":
+                break
+        for char in ratings[2]:
+            rating_2 += char
+            if char == "%":
+                break
+        for char in range(len(ratings[3])):
+            rating_3 += ratings[3][char]
+            if ratings[3][char] == ".":
+                rating_3 += ratings[3][char+1]
+                break
 
-        #TODO: Ratings Parser
+        ratings[1], ratings[2], ratings[3] = rating_1, rating_2, rating_3
 
+        print(ratings)
 
-
-    return resolutions, magnets, description
+    return resolutions, magnets, description, ratings
 
 
 def movie_preview(movie):
     running = True
-    resolutions, links, description = get_yify_data(movie)
+    resolutions, links, description, ratings = get_yify_data(movie)
 
     if len(resolutions) != len(links):
         print("SOMETHING IS WRONG \n RESOLUTIONS DO NOT MATCH LINKS")
@@ -478,13 +504,12 @@ def movie_preview(movie):
                 if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
                     if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
                         print(resolutions[download], links[download])
-                        # TODO: Enable Downloading, then automatically exit
+                        # TODO: Enable actual Downloading
                         running = False
 
 
         desc_text = textwrap.fill(description, 95)
         desc_text = desc_text.split("\n")
-        #FIXME Wall-e text gets cut off
         screen.blit(synopsis_text, (30,movie_name.get_height() + 45 + size[1] ))
         for line in range(len(desc_text)):
             text = desc_font.render(desc_text[line], True, (30,30,30))
