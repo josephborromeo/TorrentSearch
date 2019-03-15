@@ -436,16 +436,21 @@ def get_yify_data(movie):
 
 def movie_preview(movie):
     running = True
-    movie_data = get_yify_data(movie)
+    resolutions, links = get_yify_data(movie)
+
+    if len(resolutions) != len(links):
+        print("SOMETHING IS WRONG \n RESOLUTIONS DO NOT MATCH LINKS")
+
     size = (int(movie.img_size[0]*1.2), int(movie.img_size[1]*1.2))
     image = pygame.transform.smoothscale(movie.image, size)
-    font = pygame.font.SysFont(gui_font, 36)
+    font = pygame.font.SysFont(gui_font, 46)
+    dl_font = pygame.font.SysFont(gui_font, 32)
     movie_name = font.render(movie.name, True, (40,40,40))
     back = font.render("Back", True, (40,40,40))
     while running:
         screen.fill(bg_color)
         screen.blit(movie_name, ((SCREEN_WIDTH - movie_name.get_width())/2, 10))
-        screen.blit(image, (30,movie_name.get_height() + 20))
+        screen.blit(image, (30,movie_name.get_height() + 40))
 
         pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
         screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 70 + (50 - back.get_height())/2))
@@ -461,8 +466,15 @@ def movie_preview(movie):
             time.sleep(0.05)
             running = False
 
+        for download in range(len(resolutions)):
+            dl_res = dl_font.render(resolutions[download], True, (220,220,220))
+            pos_rect = pygame.Rect(SCREEN_WIDTH/2 - dl_res.get_width()/2 - 10, (movie_name.get_height() + 20 + (size[1] - 43*(len(resolutions)))/2) + 60 * download, dl_res.get_width()+20, dl_res.get_height()+10)
+            pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x -2, pos_rect.y - 2, pos_rect.w+4, pos_rect.h+4))
+            pygame.draw.rect(screen, (40, 40, 40), pos_rect)
+            screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width())/2 , pos_rect.y + (pos_rect.h - dl_res.get_height())/2))
 
-        # TODO: Display Download links
+        #TODO: Click detection for links
+
 
         clock.tick(FPS)
         for event in pygame.event.get():
@@ -470,7 +482,6 @@ def movie_preview(movie):
                 pygame.quit()
                 sys.exit()
         pygame.display.update()
-    # TODO: Write function to display the full size thumbnail, description, and download options
     # TODO: Extra features will include relevant movies and such
 
 
