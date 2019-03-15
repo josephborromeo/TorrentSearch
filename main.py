@@ -21,6 +21,8 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 bg_color = (250, 248, 239)
 
+gui_font = "Calibri"
+
 screen.fill(bg_color)
 pygame.init()
 pygame.key.set_repeat(500, 35)
@@ -28,7 +30,7 @@ pygame.key.set_repeat(500, 35)
 pygame.display.set_caption("Torrent Search")
 # Draws all changes to the window
 
-# TODO: Probably move scrapers into a seperate file
+# TODO: Probably move scrapers into a separate file
 """
                         WEBSITES
                     ---------------- 
@@ -72,10 +74,9 @@ YIFY:
 # TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc
 
 # Path to local server's main HDD
-path_to_server = "//MEDIA-SERVER/E"
-movie_path = "Movies"   #FIXME: Change to proper paths
+movie_path = "Movies"
 tv_path = "Tv Shows"
-
+path_to_server = "//MEDIA-SERVER/E/"
 
 """     STATUS CHECKS       """
 def check_statuses():
@@ -84,8 +85,7 @@ def check_statuses():
         pc = True
     # TODO: implement check for plex
     return pc, plex
-
-#print(check_statuses())
+print("STATUS:",check_statuses())
 
 # Array of Movie objects
 movies = []
@@ -161,9 +161,9 @@ def show_movies():
     num_cols = 3
     top_padding = 100
     inter_padding = 100
-    font = pygame.font.SysFont("Roboto", 22)
+    font = pygame.font.SysFont(gui_font, 22)
     char_lim = 20
-    text_spacing = 5
+    text_spacing = 3
     if movies[0] is None:
         clear_movies()
         del(movies[0])
@@ -196,7 +196,7 @@ def show_movies():
 def clear_movies():
     screen.fill(bg_color)
     draw_header()
-    text = pygame.font.SysFont("Roboto", 72).render("No Movies Found", True, (240, 30, 15))
+    text = pygame.font.SysFont(gui_font, 72).render("No Movies Found", True, (240, 30, 15))
     screen.blit(text, (((SCREEN_WIDTH - text.get_width()) / 2), 150))
 
 
@@ -208,7 +208,7 @@ class InputBox:
         self.color_active = (200,200,200)
         self.text_color = (0,0,0)
         self.text = text
-        self.font = pygame.font.SysFont("Roboto", 26)
+        self.font = pygame.font.SysFont(gui_font, 26)
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.active = False
         self.movies = []
@@ -264,7 +264,7 @@ class CheckBox:
     def __init__(self, x, y, desc=''):
         self.size = 20
         self.label = desc
-        self.font = pygame.font.SysFont("Roboto", 16)
+        self.font = pygame.font.SysFont(gui_font, 16)
         self.active = False
         self.inactive_color = (240, 240, 240)
         self.border_color = (120, 120, 120)
@@ -278,7 +278,7 @@ class CheckBox:
     def draw(self):
         # Will handle drawing and toggle logic so only one call is needed for each object
 
-        # TODO: Fix the toggling if the mouse is geld down. Probably have to use events
+        # TODO: Fix the toggling if the mouse is held down. Probably have to use events
         if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
             self.active = not self.active
             self.timer = time.clock()
@@ -306,16 +306,14 @@ def movie_preview():
 textInput = InputBox(10,10,SCREEN_WIDTH/1.2,35, "Search" )
 def draw_header():
     pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
-    # pygame.draw.rect(screen, (220, 220, 220), (5, 5, SCREEN_WIDTH/1.2, 40))
     textInput.draw(screen)
+    user_buttons()
 
 
 extensive_search = CheckBox(10, 52, "Extensive Search")
 fast_search = CheckBox(250, 52, "Fast Search")
-
-
 def user_buttons():
-    pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2)+ 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
+    pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2) + 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
     extensive_search.draw()
     fast_search.draw()
 
@@ -326,7 +324,7 @@ while running:
         show_movies()
 
     draw_header()
-    user_buttons()
+    #user_buttons()
 
     clock.tick(FPS)
     for event in pygame.event.get():
