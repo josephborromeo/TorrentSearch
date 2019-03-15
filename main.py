@@ -1,5 +1,5 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os, textwrap
+import pygame, sys, time, io, os, textwrap, threading
 from bs4 import BeautifulSoup
 from pygame import gfxdraw
 
@@ -97,23 +97,26 @@ class Movie:
     def __init__(self, name, link, img_link = ''):
         self.name = name
         self.link = link
+        self.img_link = img_link
         self.img_size = (190, 285)
         self.image = pygame.Surface(self.img_size)
         self.image.fill(bg_color)
         pygame.draw.rect(self.image, (180,180,240), (0,0,self.img_size[0], self.img_size[1]))
         pygame.draw.rect(self.image, (20,20,200), (0,0,self.img_size[0], self.img_size[1]), 5)
-        if img_link != '':
-            self.image = pygame.image.load(io.BytesIO(urlopen(img_link).read()))
+
+
+    def load_img(self, link):
+        print(self.name, "Image Loading...")
+        if self.img_link != '':
+            self.image = pygame.image.load(io.BytesIO(urlopen(link).read()))
             # Default image size is 230 x 345, Change it to 150 x 225
             self.image = pygame.transform.smoothscale(self.image, self.img_size)
-
 
 def search_yify(name):
     print("SEARCHING")
     # Check to make sure the link is open
     # This is necessary in case the domain changes. Need to check all URLs are valid at start of program!
-    # FIXME: This method is pretty slow and takes between 0.5s - 0.6s PER movie :( - Speed reduction is due to downloading images
-    # TODO: Parallelize image loading so it only take ~0.6 sec
+    # FIXED THE DOWNLOAD SPEED! now takes ~0.16s per image compared to 0.6 -> ~4x speedup
     movies = []
     try:
         start = time.clock()
@@ -121,9 +124,9 @@ def search_yify(name):
         # req = Request(yify("the"), headers=hdr)
         # req = Request(yify("transformers"), headers=hdr)
         html = urlopen(req)
-        print("Time to retrieve Page: %.2fs" % (time.clock() - start))
+        print("Time to Open Page: %.2fs" % (time.clock() - start))
         soup = BeautifulSoup(html.read(), 'html.parser')
-        print("Time to retrieve Page: %.2fs" % (time.clock() - start))
+        print("Time to Read Page: %.2fs" % (time.clock() - start))
     except:
         print("That is an invalid URL")
     else:
@@ -140,6 +143,7 @@ def search_yify(name):
         for movie in raw_data:
             if not fast_search.active:
                 movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
+                #movies[-1].load_img()
                 print(movie.find("img")['alt'][:-9])
                 # Link
                 print(movie.find("a")['href'])
@@ -148,8 +152,19 @@ def search_yify(name):
                 print()
             else:
                 movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href']))
+        print("Total Time to parse movies: %.2fs\nAvg per movie %.2fs" % (time.clock() - start, ((time.clock() - start) / len(movies))))
 
-        print("Total Time to parse movies: %.2fs\nAvg per movie %.2fs"% (time.clock() - start , ((time.clock() - start) / len(movies))))
+
+        if movies and not fast_search.active:
+            start = time.clock()
+            threads = [threading.Thread(target=mv.load_img, args=(mv.img_link,)) for mv in movies]
+            print(len(threads))
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            print("Time to download images: %.2fs    Time per image: %.2fs" %((time.clock() - start), ((time.clock() - start)/len(threads))))
+
         return movies
     else:
         movies = [None]
@@ -294,7 +309,7 @@ class CheckBox:
 
 
         if self.label != '':
-            screen.blit(self.text, (self.rect.x + self.size + 5, self.rect.y + (self.size - self.text.get_height())/2))
+            screen.blit(self.text, (self.rect.x + self.size + 5, self.rect.y + (self.size - self.text.get_height())))
 
 
 def movie_preview():
@@ -324,7 +339,6 @@ while running:
         show_movies()
 
     draw_header()
-    #user_buttons()
 
     clock.tick(FPS)
     for event in pygame.event.get():
