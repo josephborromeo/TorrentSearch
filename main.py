@@ -85,13 +85,14 @@ def check_statuses():
         pc = True
     # TODO: implement check for plex
     return pc, plex
-print("STATUS:",check_statuses())
+#print("STATUS:",check_statuses())
 
 # Array of Movie objects
 movies = []
 
 """ Link Definintions """
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
+
 
 class Movie:
     def __init__(self, name, link, img_link = ''):
@@ -112,10 +113,13 @@ class Movie:
             # Default image size is 230 x 345, Change it to 150 x 225
             self.image = pygame.transform.smoothscale(self.image, self.img_size)
 
+
+total_movies = 0
+
+
 def search_yify(name):
     print("SEARCHING")
-    # Check to make sure the link is open
-    # This is necessary in case the domain changes. Need to check all URLs are valid at start of program!
+    # FIXME: Speed up opening links -> takes too long for the initial load which makes everything seem slow
     # FIXED THE DOWNLOAD SPEED! now takes ~0.16s per image compared to 0.6 -> ~4x speedup
     movies = []
     try:
@@ -138,6 +142,7 @@ def search_yify(name):
     if len(raw_data) > 0:
         print(len(raw_data), "Results Found\n----------------")
         # Limit the number of movies to load
+        total_movies = len(raw_data)
         if len(raw_data) > 6:
             raw_data = raw_data[:6]
         for movie in raw_data:
@@ -165,16 +170,16 @@ def search_yify(name):
                 thread.join()
             print("Time to download images: %.2fs    Time per image: %.2fs" %((time.clock() - start), ((time.clock() - start)/len(threads))))
 
-        return movies
+        return movies, total_movies
     else:
         movies = [None]
         print("No Movies Found")
-        return movies
+        return movies, 0
 
 def show_movies():
     # TODO: Add option for multiple screens, can just keep the whole array and then pick which section we are looking at
     num_cols = 3
-    top_padding = 100
+    top_padding = 110
     inter_padding = 100
     font = pygame.font.SysFont(gui_font, 22)
     char_lim = 20
@@ -227,6 +232,7 @@ class InputBox:
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.active = False
         self.movies = []
+        self.total_movies = 0
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -248,7 +254,10 @@ class InputBox:
             if self.active:
                 if event.key == pygame.K_RETURN:
                     print(self.text)
-                    self.movies = search_yify(self.text)
+                    if not extensive_search.active:
+                        self.movies, self.total_movies = search_yify(self.text)
+                    else:
+                        pass
                     self.text = 'Search'
                     self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                     self.active = False
@@ -261,7 +270,8 @@ class InputBox:
                 if self.active:
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
         if self.movies:
-            return self.movies
+            return self.movies, self.total_movies
+        return [], 0
 
     def draw(self, screen):
         # Blit the rect.
@@ -311,6 +321,67 @@ class CheckBox:
         if self.label != '':
             screen.blit(self.text, (self.rect.x + self.size + 5, self.rect.y + (self.size - self.text.get_height())))
 
+class ModeSelector():
+    def __init__(self, x, y):
+        self.height = 29
+        self.width = 100     # Width per side
+        self.x = x
+        self.y = y
+        self.timer = 0
+        self.threshhold = 0.2
+
+        self.movie_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        self.tv_rect = pygame.Rect(self.x + self.width, self.y, self.width, self.height)
+
+        self.movie_mode = True
+
+        # Colors
+        self.selected = (78, 194, 196)
+        self.selected_hover = (108, 224, 226)
+
+        self.unselected = (73, 92, 122)
+        self.unselected_hover = (102, 129, 173)
+
+        self.font = pygame.font.SysFont(gui_font, 24)
+        self.movie_text = self.font.render("Movies", True, (40,40,40))
+        self.tv_text = self.font.render("TV Shows", True, (40,40,40))
+
+    def draw(self):
+        if self.movie_mode:
+            if self.tv_rect.collidepoint(pygame.mouse.get_pos()):
+                pygame.draw.rect(screen, self.selected, self.movie_rect)
+                pygame.draw.rect(screen, self.unselected_hover, self.tv_rect)
+
+                if pygame.mouse.get_pressed()[0] and time.clock() - self.timer > self.threshhold:
+                    self.movie_mode = not self.movie_mode
+                    self.timer = time.clock()
+            elif self.movie_rect.collidepoint(pygame.mouse.get_pos()):
+                pygame.draw.rect(screen, self.selected_hover, self.movie_rect)
+                pygame.draw.rect(screen, self.unselected, self.tv_rect)
+
+            else:
+                pygame.draw.rect(screen, self.selected, self.movie_rect)
+                pygame.draw.rect(screen, self.unselected, self.tv_rect)
+
+        else:
+            if self.movie_rect.collidepoint(pygame.mouse.get_pos()):
+                pygame.draw.rect(screen, self.unselected_hover, self.movie_rect)
+                pygame.draw.rect(screen, self.selected, self.tv_rect)
+
+                if pygame.mouse.get_pressed()[0] and time.clock() - self.timer > self.threshhold:
+                    self.movie_mode = not self.movie_mode
+                    self.timer = time.clock()
+
+            elif self.tv_rect.collidepoint(pygame.mouse.get_pos()):
+                pygame.draw.rect(screen, self.unselected, self.movie_rect)
+                pygame.draw.rect(screen, self.selected_hover, self.tv_rect)
+
+            else:
+                pygame.draw.rect(screen, self.unselected, self.movie_rect)
+                pygame.draw.rect(screen, self.selected, self.tv_rect)
+
+        screen.blit(self.movie_text, (self.x + (self.width - self.movie_text.get_width())/2 , self.y + (self.height - self.movie_text.get_height())))
+        screen.blit(self.tv_text, (self.x + self.width + (self.width - self.tv_text.get_width()) / 2, self.y + (self.height - self.tv_text.get_height())))
 
 def movie_preview():
     # TODO: Write function to display the full size thumbnail, description, and download options
@@ -318,19 +389,24 @@ def movie_preview():
     pass
 
 
-textInput = InputBox(10,10,SCREEN_WIDTH/1.2,35, "Search" )
+textInput = InputBox(10, 10, SCREEN_WIDTH/1.2, 35, "Search")
 def draw_header():
-    pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 80))
+    pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 90))
     textInput.draw(screen)
     user_buttons()
+    font = pygame.font.SysFont(gui_font, 26)
+    result_text = font.render("Results Found: " + str(total_movies), True, (230, 230, 230))
+    screen.blit(result_text, (505, 56))
 
 
-extensive_search = CheckBox(10, 52, "Extensive Search")
-fast_search = CheckBox(250, 52, "Fast Search")
+extensive_search = CheckBox(230, 57, "Extensive Search")
+fast_search = CheckBox(385, 57, "Fast Search")
+mode_select = ModeSelector(10, 53)
 def user_buttons():
     pygame.draw.rect(screen, (130, 90, 95), ((SCREEN_WIDTH/1.2) + 20, 10, (SCREEN_WIDTH - (SCREEN_WIDTH/1.2 + 20) - 10), 35))
     extensive_search.draw()
     fast_search.draw()
+    mode_select.draw()
 
 
 running = True
@@ -342,7 +418,7 @@ while running:
 
     clock.tick(FPS)
     for event in pygame.event.get():
-        movies = textInput.handle_event(event)
+        movies, total_movies = textInput.handle_event(event)
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
