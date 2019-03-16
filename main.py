@@ -75,6 +75,7 @@ movie_path = "Movies"
 tv_path = "Tv Shows"
 path_to_server = "//MEDIA-SERVER/E/"
 
+# TODO:
 """     STATUS CHECKS       """
 def check_statuses():
     pc, plex = False, False
@@ -89,7 +90,6 @@ movies = []
 
 """ Link Definintions """
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
-
 
 class Movie:
     def __init__(self, name, link, img_link = ''):
@@ -316,7 +316,6 @@ class CheckBox:
 
     def draw(self):
         # Will handle drawing and toggle logic so only one call is needed for each object
-
         # TODO: Fix the toggling if the mouse is held down. Probably have to use events
         if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
             self.active = not self.active
@@ -399,7 +398,6 @@ class ModeSelector():
 
 
 def get_yify_data(movie):
-
     link = movie.link
     resolutions, magnets = [], []
     description = ''
@@ -484,16 +482,16 @@ def movie_preview(movie):
         for img in images:
             req = Request(url='http://yts.am'+img, headers=hdr)
             rotten_imgs.append(pygame.image.load(io.BytesIO(urlopen(req).read())))
-            # TODO: Scale image properly
-            #rotten_imgs[-1]
 
-    rotten_imgs.insert(0, pygame.image.load('/resources/heart.png').convert())
-    rotten_imgs.append(pygame.image.load('/resources/imdb_logo.png').convert())
+    rotten_imgs.insert(0, pygame.image.load('resources/heart.png').convert_alpha())
+    rotten_imgs.append(pygame.image.load('resources/imdb_logo.png').convert_alpha())
+
+    rotten_imgs[0] = pygame.transform.smoothscale(rotten_imgs[0], (25,25))
+    rotten_imgs[-1] = pygame.transform.smoothscale(rotten_imgs[-1], (50, 25))
 
     print(len(rotten_imgs))
 
     # Scale images
-
     size = (int(movie.img_size[0]*1.2), int(movie.img_size[1]*1.2))
     image = pygame.transform.smoothscale(movie.image, size)
     font = pygame.font.SysFont(gui_font, 46)
@@ -525,8 +523,14 @@ def movie_preview(movie):
             pos = pygame.mouse.get_pos()
             if pos[0] > pos_rect.x and pos[0] < pos_rect.x + pos_rect.w:
                 if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
+                    dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
+                    pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (movie_name.get_height() + 20 + (size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,dl_res.get_width() + 20, dl_res.get_height() + 10)
+                    pygame.draw.rect(screen, (120, 120, 120),(pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
+                    pygame.draw.rect(screen, (80, 80, 80), pos_rect)
+                    screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2,pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
                     if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
                         print(resolutions[download], links[download])
+                        # TODO: Confirmation screen!
                         # TODO: Enable actual Downloading
                         running = False
 
@@ -539,13 +543,11 @@ def movie_preview(movie):
             screen.blit(text, (30, movie_name.get_height() + 75 + size[1] + 22*line))
 
 
-        #TODO: Display Ratings, add icons
+        for rate in range(len(rotten_imgs)):
+            rating = desc_font.render(ratings[rate], True, (30,30,30))
 
-
-
-
-
-
+            screen.blit(rotten_imgs[rate], (725 - rotten_imgs[rate].get_width() - 10, 150 + 40 * rate))
+            screen.blit(rating, (725, 150 + (rotten_imgs[rate].get_height() - rating.get_height())/2 + 1 + 40*rate))
 
         # Back Button
         pos = pygame.mouse.get_pos()
