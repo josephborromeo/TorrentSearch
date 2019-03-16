@@ -404,7 +404,7 @@ def get_yify_data(movie):
     resolutions, magnets = [], []
     description = ''
     # [likes, RT Critics, RT Audience, IMDB]
-    ratings = []
+    ratings, images = [], []
 
     try:
         start = time.clock()
@@ -442,7 +442,6 @@ def get_yify_data(movie):
             ratings[rate] = ratings[rate].replace('\n', '')
             ratings[rate] = ratings[rate].replace(' ', '')
 
-
         print(ratings)
         ratings = ratings[:-1]
         temp = ''
@@ -457,19 +456,43 @@ def get_yify_data(movie):
                     temp += ratings[rating][char + 1]
                     ratings[rating] = temp
                     break
-
-
+            if rating == len(ratings)-1:
+                if not '.' in ratings[rating]:
+                    ratings[rating] = ratings[rating][0] + '.0'
         print(ratings)
 
-    return resolutions, magnets, description, ratings
+        # FIXME: Could have all the images pre-downloaded and then just check which one is being used - faster
+        raw_images = soup.findAll('a', class_="icon")
+        raw_images = raw_images[:-1]
+        if raw_images:
+            for img in raw_images:
+                images.append(img.find('img')['src'])
+
+    return resolutions, magnets, description, ratings, images
 
 
 def movie_preview(movie):
     running = True
-    resolutions, links, description, ratings = get_yify_data(movie)
-
+    resolutions, links, description, ratings, images = get_yify_data(movie)
+    rotten_imgs = []
     if len(resolutions) != len(links):
         print("SOMETHING IS WRONG \n RESOLUTIONS DO NOT MATCH LINKS")
+
+    print("Images Parsed:", len(images))
+    if images:
+        print("Loading Images", images)
+        for img in images:
+            req = Request(url='http://yts.am'+img, headers=hdr)
+            rotten_imgs.append(pygame.image.load(io.BytesIO(urlopen(req).read())))
+            # TODO: Scale image properly
+            #rotten_imgs[-1]
+
+    rotten_imgs.insert(0, pygame.image.load('/resources/heart.png').convert())
+    rotten_imgs.append(pygame.image.load('/resources/imdb_logo.png').convert())
+
+    print(len(rotten_imgs))
+
+    # Scale images
 
     size = (int(movie.img_size[0]*1.2), int(movie.img_size[1]*1.2))
     image = pygame.transform.smoothscale(movie.image, size)
@@ -486,6 +509,7 @@ def movie_preview(movie):
         screen.blit(movie_name, ((SCREEN_WIDTH - movie_name.get_width())/2, 10))
         screen.blit(image, (30,movie_name.get_height() + 40))
 
+        # Back Button
         pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
         screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 70 + (50 - back.get_height())/2))
 
@@ -516,6 +540,12 @@ def movie_preview(movie):
 
 
         #TODO: Display Ratings, add icons
+
+
+
+
+
+
 
         # Back Button
         pos = pygame.mouse.get_pos()
