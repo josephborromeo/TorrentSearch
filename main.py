@@ -1,7 +1,9 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os, textwrap, threading
+import pygame, sys, time, io, os, textwrap, threading, webbrowser
 from bs4 import BeautifulSoup
 from pygame import gfxdraw
+
+
 
 """ URLLIB HEADER"""
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -18,6 +20,7 @@ FPS = 60
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 900, 900
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Torrent Search")
 
 bg_color = (250, 248, 239)
 
@@ -61,7 +64,11 @@ EZTV: Just not a good selection
     - Automatically set download path when choosing to search for either a Movie of TV Show
     
     - Websites other than YIFY, show: Description, File Size, Seeders   - basically a list view
-        - Have a checkbox to choose "extensive search" to check other websites
+        - Have a checkbox to choose "extensive search" to check other websites                                          - DONE!
+        
+    - Movie trailer button in movie screen                                                                              - DONE!
+    - Magnifying glass at end of search bar                                                                             - DONE!
+    
 Site Specific Features
 -----------------------
 YIFY:
@@ -75,7 +82,7 @@ movie_path = "Movies"
 tv_path = "Tv Shows"
 path_to_server = "//MEDIA-SERVER/E/"
 
-# TODO:
+
 """     STATUS CHECKS       """
 def check_statuses():
     pc, plex = False, False
@@ -244,19 +251,27 @@ class InputBox:
         self.text = text
         self.font = pygame.font.SysFont(gui_font, 26)
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
+        self.search_img = pygame.image.load('resources/search_icon.png').convert_alpha()
         self.active = False
         self.movies = []
         self.total_movies = 0
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
             # If the user clicked on the input_box rect.
             if self.rect.collidepoint(event.pos):
+                if event.pos[0] > self.rect.x + self.rect.w - 35 and event.pos[0] < self.rect.x + self.rect.w and event.pos[1] > self.rect.y and event.pos[1] < self.rect.y + self.rect.h and self.text != 'Search':
+                    self.search()
                 # Toggle the active variable.
-                if not self.active and self.text == 'Search':
+                elif not self.active and self.text == 'Search':
                     self.text = ''
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
-                self.active = not self.active
+                    self.active = not self.active
+                elif self.active and self.text == '':
+                    self.text = 'Search'
+                    self.txt_surface = self.font.render(self.text, True, self.color_inactive)
+                    self.active = not self.active
+
             else:
                 if self.active and self.text == '':
                     self.text = 'Search'
@@ -264,17 +279,11 @@ class InputBox:
                 self.active = False
             # Change the current color of the input box.
             self.color = self.color_active if self.active else self.color_inactive
+
         if event.type == pygame.KEYDOWN:
             if self.active:
                 if event.key == pygame.K_RETURN:
-                    print(self.text)
-                    if not extensive_search.active:
-                        self.movies, self.total_movies = search_yify(self.text)
-                    else:
-                        pass
-                    self.text = 'Search'
-                    self.txt_surface = self.font.render(self.text, True, self.color_inactive)
-                    self.active = False
+                    self.search()
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
@@ -298,6 +307,19 @@ class InputBox:
         # Blit the text. Now centered vertically
         screen.blit(self.txt_surface, (self.rect.x + 5, (self.rect.y + (self.rect.h - self.txt_surface.get_height())/2)))
 
+        # Blit search Icon
+        screen.blit(self.search_img, (self.rect.x + self.rect.w - 35, self.rect.y + 1))
+
+    def search(self):
+        print(self.text)
+        if not extensive_search.active:
+            self.movies, self.total_movies = search_yify(self.text)
+        else:
+            #TODO: Call Extensive Search function
+            pass
+        self.text = 'Search'
+        self.txt_surface = self.font.render(self.text, True, self.color_inactive)
+        self.active = False
 
 class CheckBox:
     def __init__(self, x, y, desc=''):
@@ -316,7 +338,6 @@ class CheckBox:
 
     def draw(self):
         # Will handle drawing and toggle logic so only one call is needed for each object
-        # TODO: Fix the toggling if the mouse is held down. Probably have to use events
         if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
             self.active = not self.active
             self.timer = time.clock()
@@ -397,10 +418,65 @@ class ModeSelector():
         screen.blit(self.tv_text, (self.x + self.width + (self.width - self.tv_text.get_width()) / 2, self.y + (self.height - self.tv_text.get_height())))
 
 
+def confirmation_screen(text=''):
+    text = "Are you sure you want to " + text + "?"
+    text = textwrap.fill(text, 30)
+    running = True
+    choice = False
+    bg = screen.copy()
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
+    pygame.draw.rect(overlay, (160,50,90,120), (300,300, 150,150))
+    body_rect = pygame.Rect(150, 250, 600, 300)
+    font = pygame.font.SysFont(gui_font, 42, True)
+    text_list = text.split('\n')
+    disp_text = []
+    btnfont = pygame.font.SysFont(gui_font, 65, True)
+    yes_text = btnfont.render("YES", True, (50,50,50))
+    no_text = btnfont.render("NO", True, (50,50,50))
+    for i in text_list:
+        disp_text.append(font.render(i, True, (50,50,50)))
+
+    while running:
+        screen.blit(bg, (0, 0))
+        pygame.draw.rect(overlay, (219, 243, 252, 240), body_rect)
+        for i in range(len(disp_text)):
+            overlay.blit(disp_text[i], (150 + (600 - disp_text[i].get_width())/2, 260 + 40*i))
+
+        pos = pygame.mouse.get_pos()
+        # Yes Button
+        if pos[0] > body_rect.x + (300-200)/2 and pos[0] < body_rect.x + (300-200)/2 + 200 and pos[1] > body_rect.y + body_rect.h - 90 - (300-200)/2 and pos[1] < body_rect.y + body_rect.h - 90 - (300-200)/2 + 90:
+            pygame.draw.rect(overlay, (100, 255, 157, 230),(body_rect.x + (300 - 200) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2, 200, 90))
+            if pygame.mouse.get_pressed()[0]:
+                choice = True
+                return choice
+        else:
+            pygame.draw.rect(overlay, (80,255,137, 240), (body_rect.x + (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
+        overlay.blit(yes_text, (body_rect.x + (300-200)/2 + (200 - yes_text.get_width())/2, body_rect.y + body_rect.h - 90 - (300-200)/2 + (90 - yes_text.get_height())/2))
+
+        # No Button
+        if pos[0] > body_rect.x + body_rect.w - 200 - (300-200)/2 and pos[0] < body_rect.x + body_rect.w - 200 - (300-200)/2 + 200 and pos[1] > body_rect.y + body_rect.h - 90 - (300-200)/2 and pos[1] < body_rect.y + body_rect.h - 90 - (300-200)/2 + 90:
+            pygame.draw.rect(overlay, (255, 100, 110, 230), (body_rect.x + body_rect.w - 200 - (300 - 200) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2, 200, 90))
+            if pygame.mouse.get_pressed()[0]:
+                choice = False
+                return choice
+        else:
+            pygame.draw.rect(overlay, (255,79,90, 240), (body_rect.x + body_rect.w - 200 - (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
+        overlay.blit(no_text, (body_rect.x + body_rect.w - 200 - (300 - 200) / 2 + (200 - no_text.get_width()) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2 + (90 - no_text.get_height()) / 2))
+
+        screen.blit(overlay, (0, 0))
+
+        pygame.display.update()
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+
 def get_yify_data(movie):
     link = movie.link
     resolutions, magnets = [], []
-    description = ''
+    description, trailer_link = '', ''
     # [likes, RT Critics, RT Audience, IMDB]
     ratings, images = [], []
 
@@ -432,6 +508,7 @@ def get_yify_data(movie):
 
         description = soup.find('p', class_="hidden-sm hidden-md hidden-lg").text[1:]
 
+        # Parse Ratings
         raw_ratings = soup.findAll('div', class_="rating-row")
         ratings = []
         for rating in raw_ratings:
@@ -458,7 +535,7 @@ def get_yify_data(movie):
                 if not '.' in ratings[rating]:
                     ratings[rating] = ratings[rating][0] + '.0'
         print(ratings)
-
+        # Rating Images
         # FIXME: Could have all the images pre-downloaded and then just check which one is being used - faster
         raw_images = soup.findAll('a', class_="icon")
         raw_images = raw_images[:-1]
@@ -466,12 +543,17 @@ def get_yify_data(movie):
             for img in raw_images:
                 images.append(img.find('img')['src'])
 
-    return resolutions, magnets, description, ratings, images
+        # Parse trailer Link
+
+        trailer_link = soup.find('div', class_="screenshot").find('a', class_="youtube")['href']
+        print(trailer_link)
+
+    return resolutions, magnets, description, ratings, images, trailer_link
 
 
 def movie_preview(movie):
     running = True
-    resolutions, links, description, ratings, images = get_yify_data(movie)
+    resolutions, links, description, ratings, images, trailer = get_yify_data(movie)
     rotten_imgs = []
     if len(resolutions) != len(links):
         print("SOMETHING IS WRONG \n RESOLUTIONS DO NOT MATCH LINKS")
@@ -505,34 +587,7 @@ def movie_preview(movie):
     while running:
         screen.fill(bg_color)
         screen.blit(movie_name, ((SCREEN_WIDTH - movie_name.get_width())/2, 10))
-        screen.blit(image, (30,movie_name.get_height() + 40))
-
-        # Back Button
-        pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
-        screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 70 + (50 - back.get_height())/2))
-
-
-        # Display Links
-        for download in range(len(resolutions)):
-            dl_res = dl_font.render(resolutions[download], True, (220,220,220))
-            pos_rect = pygame.Rect(SCREEN_WIDTH/2 - dl_res.get_width()/2 - 10, (movie_name.get_height() + 20 + (size[1] - 43*(len(resolutions))-10)/2) + 60 * download, dl_res.get_width()+20, dl_res.get_height()+10)
-            pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x -2, pos_rect.y - 2, pos_rect.w+4, pos_rect.h+4))
-            pygame.draw.rect(screen, (40, 40, 40), pos_rect)
-            screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width())/2 , pos_rect.y + (pos_rect.h - dl_res.get_height())/2))
-
-            pos = pygame.mouse.get_pos()
-            if pos[0] > pos_rect.x and pos[0] < pos_rect.x + pos_rect.w:
-                if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
-                    dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
-                    pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (movie_name.get_height() + 20 + (size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,dl_res.get_width() + 20, dl_res.get_height() + 10)
-                    pygame.draw.rect(screen, (120, 120, 120),(pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
-                    pygame.draw.rect(screen, (80, 80, 80), pos_rect)
-                    screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2,pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
-                    if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
-                        print(resolutions[download], links[download])
-                        # TODO: Confirmation screen!
-                        # TODO: Enable actual Downloading
-                        running = False
+        screen.blit(image, (30, movie_name.get_height() + 40))
 
 
         desc_text = textwrap.fill(description, 95)
@@ -549,13 +604,62 @@ def movie_preview(movie):
             screen.blit(rotten_imgs[rate], (725 - rotten_imgs[rate].get_width() - 10, 150 + 40 * rate))
             screen.blit(rating, (725, 150 + (rotten_imgs[rate].get_height() - rating.get_height())/2 + 1 + 40*rate))
 
-        # Back Button
         pos = pygame.mouse.get_pos()
+
+        # Trailer Button
+        if trailer != '':
+            trailer_text = synopsis_font.render("Trailer", True, (20, 20,20))
+
+            if pos[0] > SCREEN_WIDTH - 120 and pos[0] < SCREEN_WIDTH-20 and pos[1] > image.get_height() + movie_name.get_height() and pos[1] < image.get_height() + movie_name.get_height() + 40:
+                pygame.draw.rect(screen, (65, 175, 45),(SCREEN_WIDTH - 120, image.get_height() + movie_name.get_height(), 100, 40))
+                if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.3:
+                    webbrowser.open(trailer, autoraise=True)
+                    start = time.clock()
+            else:
+                pygame.draw.rect(screen, (50, 160, 30), (SCREEN_WIDTH - 120, image.get_height() + movie_name.get_height(), 100, 40))
+            screen.blit(trailer_text, (SCREEN_WIDTH - 120 + (100 - trailer_text.get_width()) / 2, image.get_height() + movie_name.get_height() + trailer_text.get_height()/2 - 2))
+
+
+        # Back Button
+        pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
         if pos[0] > SCREEN_WIDTH - 160 and pos[0] < SCREEN_WIDTH - 20:
             if pos[1] > SCREEN_HEIGHT - 70 and pos[1] < SCREEN_HEIGHT - 20:
+                pygame.draw.rect(screen, (205, 45, 65), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
                 if pygame.mouse.get_pressed()[0]:
                     time.sleep(0.05)
                     running = False
+        screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 68 + (50 - back.get_height())/2))
+
+        # Display Links
+        for download in range(len(resolutions)):
+            dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
+            pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (
+                        movie_name.get_height() + 20 + (size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,
+                                   dl_res.get_width() + 20, dl_res.get_height() + 10)
+            pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
+            pygame.draw.rect(screen, (40, 40, 40), pos_rect)
+            screen.blit(dl_res, (
+            pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2, pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
+
+            pos = pygame.mouse.get_pos()
+            if pos[0] > pos_rect.x and pos[0] < pos_rect.x + pos_rect.w:
+                if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
+                    dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
+                    pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (
+                                movie_name.get_height() + 20 + (
+                                    size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,
+                                           dl_res.get_width() + 20, dl_res.get_height() + 10)
+                    pygame.draw.rect(screen, (120, 120, 120),
+                                     (pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
+                    pygame.draw.rect(screen, (80, 80, 80), pos_rect)
+                    screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2,
+                                         pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
+                    if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
+                        dl_confirmed = confirmation_screen('confirm this download')
+                        if dl_confirmed:
+                            # TODO: Enable actual Downloading
+                            print(resolutions[download], links[download])
+                            running = False
 
         if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
             time.sleep(0.05)
@@ -595,7 +699,6 @@ running = True
 while running:
     if movies:
         show_movies()
-
     draw_header()
 
     clock.tick(FPS)
