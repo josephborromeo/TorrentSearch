@@ -241,7 +241,7 @@ def clear_movies(show_text = True):
         text = pygame.font.SysFont(gui_font, 72).render("No Movies Found", True, (240, 30, 15))
         screen.blit(text, (((SCREEN_WIDTH - text.get_width()) / 2), 150))
 
-# TODO: Move drawing functions to another file
+# TODO: Move drawing functions and classes to another file
 
 class InputBox:
     # TODO: Add cursor support to edit parts of the input
@@ -465,6 +465,7 @@ class RoundedRectangle():
             return True
         return False
 
+#FIXME: Center Yes and No text better
 def confirmation_screen(text=''):
     text = "Are you sure you want to " + text + "?"
     text = textwrap.fill(text, 30)
@@ -724,30 +725,21 @@ def movie_preview(movie):
         screen.blit(back, ((SCREEN_WIDTH - 160 + (140 - back.get_width())/2), SCREEN_HEIGHT - 68 + (50 - back.get_height())/2))
 
         # Display Links
-        #FIXME: Fix them not being centered
+        total_link_height = len(resolutions) * 60 - 10
+
         for download in range(len(resolutions)):
             dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
-            pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (
-                        title_text[-1].get_height() + 20 + (size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,
-                                   dl_res.get_width() + 20, dl_res.get_height() + 10)
+            pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (bottom_text_y + 40 + (size[1] - total_link_height) / 2) + 60 * download, dl_res.get_width() + 20, dl_res.get_height() + 10)
             pygame.draw.rect(screen, (80, 80, 80), (pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
             pygame.draw.rect(screen, (40, 40, 40), pos_rect)
-            screen.blit(dl_res, (
-            pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2, pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
+            screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2, pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
 
             pos = pygame.mouse.get_pos()
             if pos[0] > pos_rect.x and pos[0] < pos_rect.x + pos_rect.w:
                 if pos[1] > pos_rect.y and pos[1] < pos_rect.y + pos_rect.h:
-                    dl_res = dl_font.render(resolutions[download], True, (220, 220, 220))
-                    pos_rect = pygame.Rect(SCREEN_WIDTH / 2 - dl_res.get_width() / 2 - 10, (
-                                title_text[-1].get_height() + 20 + (
-                                    size[1] - 43 * (len(resolutions)) - 10) / 2) + 60 * download,
-                                           dl_res.get_width() + 20, dl_res.get_height() + 10)
-                    pygame.draw.rect(screen, (120, 120, 120),
-                                     (pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
+                    pygame.draw.rect(screen, (120, 120, 120),(pos_rect.x - 2, pos_rect.y - 2, pos_rect.w + 4, pos_rect.h + 4))
                     pygame.draw.rect(screen, (80, 80, 80), pos_rect)
-                    screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2,
-                                         pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
+                    screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2, pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
                     if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
                         dl_confirmed = confirmation_screen('confirm this download')
                         if dl_confirmed:
