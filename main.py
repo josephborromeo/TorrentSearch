@@ -94,9 +94,10 @@ def check_statuses():
     # TODO: implement check for plex server status
     return pc, plex
 
+pc_stat, plex_stat = check_statuses()
 
 # Array of Movie objects
-movies = []
+movies, all_movies = [], []
 
 """ Link Definintions """
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
@@ -192,9 +193,6 @@ def search_yify(name):
         print("No Movies Found")
         return movies, all_movies, 0
 
-btn_font = pygame.font.SysFont(gui_font, 20)
-next_txt = btn_font.render("Next", True, (30, 30, 30))
-back_txt = btn_font.render("Back", True, (30, 30, 30))
 def show_movies(movies, all_movies, total_movies, page):
     # TODO: add loading icon!
     num_cols = 3
@@ -215,8 +213,8 @@ def show_movies(movies, all_movies, total_movies, page):
         # Check to see how many pages, etc.
         if total_movies > 6:
             start_index, end_index = 0, 6
-            next_btn = RoundedRectangle(SCREEN_WIDTH - 80, SCREEN_HEIGHT - 45, 75, 35, 10, (50, 180, 90))
-            back_btn = RoundedRectangle(SCREEN_WIDTH - 160, SCREEN_HEIGHT - 45, 75, 35, 10, (180, 50, 90))
+            next_btn = RoundedRectangle(SCREEN_WIDTH - 80, SCREEN_HEIGHT - 45, 75, 35, 10, (50, 180, 90), font_size=26, text='Next')
+            back_btn = RoundedRectangle(SCREEN_WIDTH - 160, SCREEN_HEIGHT - 45, 75, 35, 10, (180, 50, 90), font_size=26, text='Back')
 
 
             pages = math.ceil(total_movies/6)
@@ -290,7 +288,6 @@ def show_movies(movies, all_movies, total_movies, page):
                 if page < pages:
                     if page < 4:
                         next_btn.draw()
-                        screen.blit(next_txt, (next_btn.x + (next_btn.width - next_txt.get_width())/2, next_btn.y + (next_btn.height - next_txt.get_height())/2))
                         if pressed and next_btn.onHover():
                             start = time.clock()
                             while pressed:
@@ -301,7 +298,6 @@ def show_movies(movies, all_movies, total_movies, page):
 
                 if page > 1:
                     back_btn.draw()
-                    screen.blit(back_txt, (back_btn.x + (back_btn.width - back_txt.get_width())/2, back_btn.y + (back_btn.height - back_txt.get_height())/2))
                     if pressed and back_btn.onHover():
                         start = time.clock()
                         while pressed:
@@ -337,6 +333,10 @@ class InputBox:
         self.movies, self.all_movies = [], []
         self.total_movies = 0
         self.show_icon = show_icon
+        self.pointer = 0
+        self.cursor_active = True
+        self.cursor_rate = 30
+        self.cursor_count = 0
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
@@ -370,23 +370,54 @@ class InputBox:
             if self.active:
                 if event.key == pygame.K_RETURN:
                     self.search()
+                    self.pointer = 0
                 elif event.key == pygame.K_BACKSPACE:
-                    self.text = self.text[:-1]
+                    self.text = self.text[:self.pointer-1] + self.text[self.pointer:]
+                    self.pointer -= 1
+                elif event.key == pygame.K_DELETE:
+                    self.text = self.text[:self.pointer] + self.text[self.pointer+1:]
+                elif event.key == pygame.K_RIGHT:
+                    if self.pointer < len(self.text):
+                        self.pointer += 1
+                elif event.key == pygame.K_LEFT:
+                    if self.pointer > 0:
+                        self.pointer -= 1
+
                 else:
-                    if self.txt_surface.get_width() < self.rect.w-40:
-                        self.text += event.unicode
+                    if self.txt_surface.get_width() < self.rect.w-45 and self.show_icon:
+                        print(self.pointer, len(self.text))
+                        if len(self.text) > 0:
+                            self.text = self.text[:self.pointer] + event.unicode + self.text[self.pointer:]
+                        else:
+                            self.text += event.unicode
+                        # FIXME: Not working
+                        if event.key != pygame.K_LSHIFT and event.key != pygame.K_RSHIFT:
+                            self.pointer += 1
                 # Re-render the text.
                 if self.active:
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
-        if self.movies:
-            return self.movies, self.all_movies, self.total_movies
+        if not extensive_search.active:
+            if self.movies:
+                return self.movies, self.all_movies, self.total_movies
         return [], [], 0
+
 
     def draw(self, screen):
         # Blit the rect.
         if self.active:
             pygame.draw.rect(screen, (245,245,245), self.rect, 0)
             pygame.draw.rect(screen, (66, 206, 245), (self.rect.x-2, self.rect.y-2, self.rect.w+2, self.rect.h+2), 3)
+
+            # Draw cursor at end of text
+            if self.cursor_active:
+                self.temp_text_surf = self.font.render(self.text[:self.pointer], True, self.text_color)
+                pygame.draw.line(screen, (30, 30, 30), (self.rect.x + self.temp_text_surf.get_width() + 5, self.rect.y + 3), (self.rect.x + self.temp_text_surf.get_width() + 5, self.rect.y + self.rect.h - 7), 2)
+            self.cursor_count += 1
+
+            if self.cursor_count >= self.cursor_rate:
+                self.cursor_active = not self.cursor_active
+                self.cursor_count = 0
+
         else:
             pygame.draw.rect(screen, (245, 245, 245), self.rect, 0)
 
@@ -514,7 +545,7 @@ class ModeSelector():
         screen.blit(self.tv_text, (self.x + self.width + (self.width - self.tv_text.get_width()) / 2, self.y + (self.height - self.tv_text.get_height())))
 
 class RoundedRectangle():
-    def __init__(self, x, y, width, height, radius, color, hover_enabled=True, surf=screen):
+    def __init__(self, x, y, width, height, radius, color, font = gui_font, font_size = 30, text = '', hover_enabled=True, surf=screen):
         self.x = x
         self.y = y
         self.width = width
@@ -525,6 +556,12 @@ class RoundedRectangle():
         self.col_rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.hover_check = hover_enabled
         self.surf = surf
+        self.text = text
+
+        if self.text != '':
+            self.font_size = font_size
+            self.font = pygame.font.SysFont(font, self.font_size)
+            self.text_render = self.font.render(self.text, True, (30, 30, 30))
 
     def draw(self):
         if self.onHover() and self.hover_check:
@@ -551,6 +588,8 @@ class RoundedRectangle():
                 pygame.draw.circle(self.surf, self.color, (self.x + self.radius, self.y + self.height- self.radius), self.radius)
                 pygame.draw.circle(self.surf, self.color, (self.x + self.width - self.radius, self.y + self.height - self.radius), self.radius)
 
+        if self.text != '':
+            self.surf.blit(self.text_render, (self.x + (self.width - self.text_render.get_width())/2, self.y + (self.height - self.text_render.get_height())/2))
 
     def onHover(self):
         pos = pygame.mouse.get_pos()
@@ -618,34 +657,71 @@ def confirmation_screen(text='', background=''):
 def settings_screen():
     # TODO: Settings
     """
-    Reboot Computer button,
-    Server and Computer status,
-    status refresh button,
+    Reboot Computer button,                                                                                             - Done
+    Server and Computer status,                                                                                         - Done
+    status refresh button,                                                                                              - Done
+    Server mode OR Standalone mode
     Open config file?,
     Sort Priority: Seeders, File Size, Date Uploaded, Default order <-- Probably gonna be default. rest can come later
     """
+    start = time.clock()
     running = True
     bg = screen_copy    # Fixes movies not showing up when settings menu is opened
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
     title_font = pygame.font.SysFont(gui_font, 50)
     title_text = title_font.render("Settings", True, (30, 30, 30))
+    setting_font = pygame.font.SysFont(gui_font, 35)
     width = int(SCREEN_WIDTH/1.5)
     height = int(SCREEN_HEIGHT/1.5)
-    body = RoundedRectangle(int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2), width, height, 15, (232, 220, 220), False, surf=overlay)
+    rect = pygame.Rect(int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2), width, height)
+    body = RoundedRectangle(int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2), width, height, 15, (232, 220, 220), hover_enabled=False, surf=overlay)
     exit_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + width - 50, int((SCREEN_HEIGHT - height)/2) + 10, 40, 40, 10, (180, 80, 80), surf=overlay)
+    reboot_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + int((width - 250)/2), int((SCREEN_HEIGHT - height)/2) + height - 45, 250, 35, 5, (255, 200, 100), font_size=25, text="REBOOT COMPUTER", surf=overlay)
+    stat_radius = 16
+    pc_status = setting_font.render("PC Status:", True, (30,30,30))
+    plex_status = setting_font.render("Plex Status:", True, (30,30,30))
+    refresh_status_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + width - 125, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15, 90, 30, 10, (30, 190, 95), font_size=25, text="Refresh", surf=overlay)
 
     while running:
         screen.blit(bg, (0, 0))
         body.draw()
+        reboot_btn.draw()
+        pygame.draw.line(overlay, (80, 80, 80), (int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), (int((SCREEN_WIDTH - width)/2) + width, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), 2)
 
         # Exit Button
         exit_btn.draw()
-        overlay.blit(title_text, (int((SCREEN_WIDTH - width)/2) + (width - title_text.get_width())/2, int((SCREEN_HEIGHT - height)/2) + 10))
+        overlay.blit(title_text, (int((SCREEN_WIDTH - width) / 2) + (width - title_text.get_width()) / 2, int((SCREEN_HEIGHT - height) / 2) + 10))
+
+        # Status
+        overlay.blit(pc_status, (int((SCREEN_WIDTH - width)/2) + 30, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15))
+        if pc_stat:
+            pygame.draw.circle(overlay, (20,255,20), (int((SCREEN_WIDTH - width)/2) + pc_status.get_width() + 60, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(pc_status.get_height()/2) + 15), stat_radius)
+        else:
+            pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + pc_status.get_width() + 60, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(pc_status.get_height()/2) + 15), stat_radius)
+
+        overlay.blit(plex_status, (int((SCREEN_WIDTH - width)/2) + width/2 - 70, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15))
+        if plex_stat:
+            pygame.draw.circle(overlay, (20,255,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
+        else:
+            pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
+
+
+        refresh_status_btn.draw()
+
 
         clock.tick(FPS)
         for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONUP and exit_btn.onHover():
-                running = False
+            if event.type == pygame.MOUSEBUTTONUP and time.clock() - start > 0.4:
+                if exit_btn.onHover() or not rect.collidepoint(pygame.mouse.get_pos()):
+                    running = False
+
+                if reboot_btn.onHover() and plex_server:
+                    # TODO: Actually make it reboot the computer
+                    print("REBOOT")
+
+                if refresh_status_btn.onHover():
+                    print("Checking Status")
+                    print(check_statuses())
 
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -654,7 +730,7 @@ def settings_screen():
         screen.blit(overlay, (0, 0))
         pygame.display.update()
 
-    screen.blit(bg, (0,0))
+    screen.blit(bg, (0, 0))
     pygame.display.update()
 
 def get_yify_data(movie):
@@ -885,11 +961,14 @@ def draw_header():
     screen.blit(result_text, (505, 56))
     user_buttons()
 
+
 extensive_search = CheckBox(230, 57, "Extensive Search")
 fast_search = CheckBox(385, 57, "Fast Search")
 mode_select = ModeSelector(10, 53)
 setting_box = RoundedRectangle(SCREEN_WIDTH - 45, 10, 35, 35, 0, (130, 90, 95))
 def user_buttons():
+    if not mode_select.movie_mode:
+        extensive_search.active = True
     extensive_search.draw()
     fast_search.draw()
     mode_select.draw()
@@ -899,6 +978,7 @@ def user_buttons():
     screen.blit(gear, (SCREEN_WIDTH - 44, 11))
     if setting_box.onHover() and pygame.mouse.get_pressed()[0]:
         settings_screen()
+
 page = 1
 running = True
 while running:
@@ -913,7 +993,10 @@ while running:
 
     clock.tick(FPS)
     for event in pygame.event.get():
-        movies, all_movies, total_movies = textInput_movie.handle_event(event)
+        if mode_select.movie_mode:
+            movies, all_movies, total_movies = textInput_movie.handle_event(event)
+        else:
+            _ = textInput_tv.handle_event(event)
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
