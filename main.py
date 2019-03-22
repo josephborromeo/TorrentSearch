@@ -34,8 +34,8 @@ pygame.key.set_repeat(500, 35)
 pygame.display.set_caption("Torrent Search")
 
 # TODO: Probably move scrapers into a separate file
-# TODO: Add in reset button for computer
 # TODO: Make installer for Windows and Mac
+# TODO: Research running plex as a service - Apparently it is much better
 """
                         WEBSITES
                     ---------------- 
@@ -81,22 +81,26 @@ YIFY:
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
 path_to_server = "//MEDIA-SERVER/E/"
+plex_server = True
 
 
 """     STATUS CHECKS       """
 def check_statuses():
+    # FIXME: change so that it checks only for local folder if server is false
+    # TODO: Can have it create a folder if set to local mode
     pc, plex = False, False
     if os.path.exists(path_to_server):
         pc = True
     # TODO: implement check for plex server status
     return pc, plex
-#print("STATUS:",check_statuses())
+
 
 # Array of Movie objects
 movies = []
 
 """ Link Definintions """
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
+
 
 class Movie:
     def __init__(self, name, link, img_link = ''):
@@ -182,6 +186,8 @@ def search_yify(name):
 
 def show_movies():
     # TODO: Add option for multiple screens, can just keep the whole array and then pick which section we are looking at
+    # Maximum number of screen is 4 since max search result is 20 --> 20/6 = 4 pages to show all movies
+    # Have movies dynamically load
     num_cols = 3
     top_padding = 110
     inter_padding = 100
@@ -193,6 +199,10 @@ def show_movies():
         clear_movies()
         del(movies[0])
     else:
+        # Check to see how many pages, etc.
+        if len(movies) > 6:
+            pass
+
         screen.fill(bg_color)
         draw_header()
         for movie in range(len(movies)):
@@ -245,38 +255,41 @@ def clear_movies(show_text = True):
 
 class InputBox:
     # TODO: Add cursor support to edit parts of the input
-    def __init__(self, x, y, w, h, text=''):
+    def __init__(self, x, y, w, h, text='', show_icon=True):
         self.rect = pygame.Rect(x, y, w, h)
         self.color_inactive = (100,100,100)
         self.color_active = (200,200,200)
         self.text_color = (0,0,0)
         self.text = text
+        self.default_text = text
         self.font = pygame.font.SysFont(gui_font, 26)
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.search_img = pygame.image.load('resources/search_icon.png').convert_alpha()
         self.active = False
         self.movies = []
         self.total_movies = 0
+        self.show_icon = show_icon
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
             # If the user clicked on the input_box rect.
             if self.rect.collidepoint(event.pos):
-                if event.pos[0] > self.rect.x + self.rect.w - 35 and event.pos[0] < self.rect.x + self.rect.w and event.pos[1] > self.rect.y and event.pos[1] < self.rect.y + self.rect.h and self.text != 'Search':
+                # Search with Magnifying glass
+                if self.show_icon and event.pos[0] > self.rect.x + self.rect.w - 35 and event.pos[0] < self.rect.x + self.rect.w and event.pos[1] > self.rect.y and event.pos[1] < self.rect.y + self.rect.h and self.text != 'Search':
                     self.search()
                 # Toggle the active variable.
-                elif not self.active and self.text == 'Search':
+                elif not self.active and self.text == self.default_text:
                     self.text = ''
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
                     self.active = not self.active
                 elif self.active and self.text == '':
-                    self.text = 'Search'
+                    self.text = self.default_text
                     self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                     self.active = not self.active
 
             else:
                 if self.active and self.text == '':
-                    self.text = 'Search'
+                    self.text = self.default_text
                     self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                 self.active = False
             # Change the current color of the input box.
@@ -310,7 +323,8 @@ class InputBox:
         screen.blit(self.txt_surface, (self.rect.x + 5, (self.rect.y + (self.rect.h - self.txt_surface.get_height())/2)))
 
         # Blit search Icon
-        screen.blit(self.search_img, (self.rect.x + self.rect.w - 35, self.rect.y + 1))
+        if self.show_icon:
+            screen.blit(self.search_img, (self.rect.x + self.rect.w - 35, self.rect.y + 1))
 
     def search(self):
         print(self.text)
@@ -391,6 +405,9 @@ class ModeSelector():
                 if pygame.mouse.get_pressed()[0] and time.clock() - self.timer > self.threshhold:
                     self.movie_mode = not self.movie_mode
                     self.timer = time.clock()
+
+                    if not extensive_search.active:
+                        extensive_search.active = True
             elif self.movie_rect.collidepoint(pygame.mouse.get_pos()):
                 pygame.draw.rect(screen, self.selected_hover, self.movie_rect)
                 pygame.draw.rect(screen, self.unselected, self.tv_rect)
@@ -408,6 +425,9 @@ class ModeSelector():
                     self.movie_mode = not self.movie_mode
                     self.timer = time.clock()
 
+                    if extensive_search.active:
+                        extensive_search.active = False
+
             elif self.tv_rect.collidepoint(pygame.mouse.get_pos()):
                 pygame.draw.rect(screen, self.unselected, self.movie_rect)
                 pygame.draw.rect(screen, self.selected_hover, self.tv_rect)
@@ -421,7 +441,7 @@ class ModeSelector():
 
 
 class RoundedRectangle():
-    def __init__(self, x, y, width, height, radius, color, hover_enabled = True, surf = screen):
+    def __init__(self, x, y, width, height, radius, color, hover_enabled=True, surf=screen):
         self.x = x
         self.y = y
         self.width = width
@@ -465,12 +485,12 @@ class RoundedRectangle():
             return True
         return False
 
-#FIXME: Center Yes and No text better
-def confirmation_screen(text=''):
+
+def confirmation_screen(text='', background=''):
     text = "Are you sure you want to " + text + "?"
     text = textwrap.fill(text, 30)
     running = True
-    bg = screen.copy()
+    bg = background
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
     pygame.draw.rect(overlay, (160,50,90,120), (300,300, 150,150))
     body_rect = pygame.Rect(150, 250, 600, 300)
@@ -480,11 +500,13 @@ def confirmation_screen(text=''):
     btnfont = pygame.font.SysFont(gui_font, 65, True)
     yes_text = btnfont.render("YES", True, (50,50,50))
     no_text = btnfont.render("NO", True, (50,50,50))
+    start = time.clock()
     for i in text_list:
         disp_text.append(font.render(i, True, (50,50,50)))
 
     while running:
-        screen.blit(bg, (0, 0))
+        if bg != '':
+            screen.blit(bg, (0, 0))
         pygame.draw.rect(overlay, (219, 243, 252, 240), body_rect)
         for i in range(len(disp_text)):
             overlay.blit(disp_text[i], (150 + (600 - disp_text[i].get_width())/2, 260 + 40*i))
@@ -497,7 +519,7 @@ def confirmation_screen(text=''):
                 return True
         else:
             pygame.draw.rect(overlay, (80,255,137, 240), (body_rect.x + (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
-        overlay.blit(yes_text, (body_rect.x + (300-200)/2 + (200 - yes_text.get_width())/2, body_rect.y + body_rect.h - 90 - (300-200)/2 + (90 - yes_text.get_height())/2))
+        overlay.blit(yes_text, (body_rect.x + (300-200)/2 + (200 - yes_text.get_width())/2, body_rect.y + body_rect.h - 85 - (300-200)/2 + (90 - yes_text.get_height())/2))
 
         # No Button
         if pos[0] > body_rect.x + body_rect.w - 200 - (300-200)/2 and pos[0] < body_rect.x + body_rect.w - 200 - (300-200)/2 + 200 and pos[1] > body_rect.y + body_rect.h - 90 - (300-200)/2 and pos[1] < body_rect.y + body_rect.h - 90 - (300-200)/2 + 90:
@@ -506,12 +528,14 @@ def confirmation_screen(text=''):
                 return False
         else:
             pygame.draw.rect(overlay, (255,79,90, 240), (body_rect.x + body_rect.w - 200 - (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
-        overlay.blit(no_text, (body_rect.x + body_rect.w - 200 - (300 - 200) / 2 + (200 - no_text.get_width()) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2 + (90 - no_text.get_height()) / 2))
+        overlay.blit(no_text, (body_rect.x + body_rect.w - 200 - (300 - 200) / 2 + (200 - no_text.get_width()) / 2, body_rect.y + body_rect.h - 85 - (300 - 200) / 2 + (90 - no_text.get_height()) / 2))
 
         screen.blit(overlay, (0, 0))
 
         clock.tick(FPS)
         for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONUP and not body_rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - start > 0.2:
+                return False
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
@@ -519,9 +543,16 @@ def confirmation_screen(text=''):
         pygame.display.update()
 
 def settings_screen():
-    # TODO: Reboot Computer button, Server and Computer status, Open config file?, Sort Priority: Seeders, File Size, Date Uploaded, Default order <-- Probably gonna be default. The rest can come later
+    # TODO: Settings
+    """
+    Reboot Computer button,
+    Server and Computer status,
+    status refresh button,
+    Open config file?,
+    Sort Priority: Seeders, File Size, Date Uploaded, Default order <-- Probably gonna be default. rest can come later
+    """
     running = True
-    bg = screen.copy()  # FIXME: Something is wrong with this copy not copying the movies
+    bg = screen_copy    # Fixes movies not showing up when settings menu is opened
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
     title_font = pygame.font.SysFont(gui_font, 50)
     title_text = title_font.render("Settings", True, (30, 30, 30))
@@ -531,13 +562,11 @@ def settings_screen():
     exit_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + width - 50, int((SCREEN_HEIGHT - height)/2) + 10, 40, 40, 10, (180, 80, 80), surf=overlay)
 
     while running:
-        # FIXME: Won't Display movies, have to change the order that this function gets called
         screen.blit(bg, (0, 0))
         body.draw()
 
         # Exit Button
         exit_btn.draw()
-
         overlay.blit(title_text, (int((SCREEN_WIDTH - width)/2) + (width - title_text.get_width())/2, int((SCREEN_HEIGHT - height)/2) + 10))
 
         clock.tick(FPS)
@@ -549,7 +578,7 @@ def settings_screen():
                 pygame.quit()
                 sys.exit()
 
-        screen.blit(overlay,(0,0))
+        screen.blit(overlay, (0, 0))
         pygame.display.update()
 
     screen.blit(bg, (0,0))
@@ -653,6 +682,7 @@ def movie_preview(movie):
 
     rotten_imgs[0] = pygame.transform.smoothscale(rotten_imgs[0], (25,25))
     rotten_imgs[-1] = pygame.transform.smoothscale(rotten_imgs[-1], (50, 25))
+    background = screen.copy()
 
     print(len(rotten_imgs))
 
@@ -675,6 +705,7 @@ def movie_preview(movie):
     back = font.render("Back", True, (40,40,40))
     start = time.clock()
     while running:
+        background = screen.copy()
         screen.fill(bg_color)
 
         bottom_text_y = 10
@@ -741,7 +772,7 @@ def movie_preview(movie):
                     pygame.draw.rect(screen, (80, 80, 80), pos_rect)
                     screen.blit(dl_res, (pos_rect.x + (pos_rect.w - dl_res.get_width()) / 2, pos_rect.y + (pos_rect.h - dl_res.get_height()) / 2))
                     if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
-                        dl_confirmed = confirmation_screen('confirm this download')
+                        dl_confirmed = confirmation_screen('confirm this download', background)
                         if dl_confirmed:
                             # TODO: Enable actual Downloading
                             print(resolutions[download], links[download])
@@ -761,10 +792,23 @@ def movie_preview(movie):
     # TODO: Extra features will include relevant movies and such
     time.sleep(0.1)
 
-textInput = InputBox(10, 10, SCREEN_WIDTH - 65, 35, "Search")
+# Input boxes - Movie
+textInput_movie = InputBox(10, 10, SCREEN_WIDTH - 65, 35, "Search")
+
+# TV Shows
+textInput_tv = InputBox(10, 10, SCREEN_WIDTH - 220, 35, "Search")
+textInput_season = InputBox(SCREEN_WIDTH - 200, 10, 70, 35, "S:", show_icon=False)
+textInput_episode = InputBox(SCREEN_WIDTH - 125, 10, 70, 35, "E:", show_icon=False)
+
 def draw_header():
     pygame.draw.rect(screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, 90))
-    textInput.draw(screen)
+    if mode_select.movie_mode:
+        textInput_movie.draw(screen)
+    else:
+        textInput_tv.draw(screen)
+        textInput_season.draw(screen)
+        textInput_episode.draw(screen)
+
     font = pygame.font.SysFont(gui_font, 26)
     result_text = font.render("Results Found: " + str(total_movies), True, (230, 230, 230))
     screen.blit(result_text, (505, 56))
@@ -775,13 +819,13 @@ fast_search = CheckBox(385, 57, "Fast Search")
 mode_select = ModeSelector(10, 53)
 setting_box = RoundedRectangle(SCREEN_WIDTH - 45, 10, 35, 35, 0, (130, 90, 95))
 def user_buttons():
-    # Settings Icon
-    setting_box.draw()
-    screen.blit(gear, (SCREEN_WIDTH - 44, 11))
     extensive_search.draw()
     fast_search.draw()
     mode_select.draw()
 
+    # Settings Icon
+    setting_box.draw()
+    screen.blit(gear, (SCREEN_WIDTH - 44, 11))
     if setting_box.onHover() and pygame.mouse.get_pressed()[0]:
         settings_screen()
 
@@ -792,10 +836,11 @@ while running:
         show_movies()
 
     draw_header()
+    screen_copy = screen.copy()
 
     clock.tick(FPS)
     for event in pygame.event.get():
-        movies, total_movies = textInput.handle_event(event)
+        movies, total_movies = textInput_movie.handle_event(event)
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
