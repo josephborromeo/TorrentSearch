@@ -1,5 +1,5 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os, textwrap, threading, webbrowser
+import pygame, sys, time, io, os, textwrap, threading, webbrowser, math
 from bs4 import BeautifulSoup
 from pygame import gfxdraw
 
@@ -110,6 +110,7 @@ class Movie:
         self.img_size = (190, 285)
         self.image = pygame.Surface(self.img_size)
         self.image.fill(bg_color)
+        self.loaded = False
         pygame.draw.rect(self.image, (180,180,240), (0,0,self.img_size[0], self.img_size[1]))
         pygame.draw.rect(self.image, (20,20,200), (0,0,self.img_size[0], self.img_size[1]), 5)
 
@@ -120,21 +121,30 @@ class Movie:
             self.image = pygame.image.load(io.BytesIO(urlopen(link).read()))
             # Default image size is 230 x 345, Change it to 150 x 225
             self.image = pygame.transform.smoothscale(self.image, self.img_size)
+            self.loaded = True
 
 
 total_movies = 0
 
+def load_movie_images(movies):
+    start = time.clock()
+    threads = [threading.Thread(target=mv.load_img, args=(mv.img_link,)) for mv in movies]
+    print(len(threads))
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    print("Time to download images: %.2fs    Time per image: %.2fs" % (
+    (time.clock() - start), ((time.clock() - start) / len(threads))))
 
 def search_yify(name):
     print("SEARCHING")
     # FIXME: Speed up opening links -> takes too long for the initial load which makes everything seem slow
     # FIXED THE DOWNLOAD SPEED! now takes ~0.16s per image compared to 0.6 -> ~4x speedup
-    movies = []
+    movies, all_movies = [], []
     try:
         start = time.clock()
         req = Request(yify(str(name)), headers=hdr)
-        # req = Request(yify("the"), headers=hdr)
-        # req = Request(yify("transformers"), headers=hdr)
         html = urlopen(req)
         print("Time to Open Page: %.2fs" % (time.clock() - start))
         soup = BeautifulSoup(html.read(), 'html.parser')
@@ -151,11 +161,11 @@ def search_yify(name):
         print(len(raw_data), "Results Found\n----------------")
         # Limit the number of movies to load
         total_movies = len(raw_data)
-        if len(raw_data) > 6:
-            raw_data = raw_data[:6]
+        #if len(raw_data) > 6:
+        #    raw_data = raw_data[:6]
         for movie in raw_data:
             if not fast_search.active:
-                movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
+                all_movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href'], movie.find("img")['src']))
                 #movies[-1].load_img()
                 print(movie.find("img")['alt'][:-9])
                 # Link
@@ -164,30 +174,29 @@ def search_yify(name):
                 print(movie.find("img")['src'])
                 print()
             else:
-                movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href']))
-        print("Total Time to parse movies: %.2fs\nAvg per movie %.2fs" % (time.clock() - start, ((time.clock() - start) / len(movies))))
+                all_movies.append(Movie(movie.find("img")['alt'][:-9], movie.find("a")['href']))
 
+        print("Total Time to parse movies: %.2fs\nAvg per movie %.2fs" % (time.clock() - start, ((time.clock() - start) / len(all_movies))))
+
+        if total_movies > 6:
+            movies = all_movies[:6]
+        else:
+            movies = all_movies
 
         if movies and not fast_search.active:
-            start = time.clock()
-            threads = [threading.Thread(target=mv.load_img, args=(mv.img_link,)) for mv in movies]
-            print(len(threads))
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
-            print("Time to download images: %.2fs    Time per image: %.2fs" %((time.clock() - start), ((time.clock() - start)/len(threads))))
+            load_movie_images(movies)
 
-        return movies, total_movies
+        return movies, all_movies, total_movies
     else:
-        movies = [None]
+        movies, all_movies = [None], [None]
         print("No Movies Found")
-        return movies, 0
+        return movies, all_movies, 0
 
-def show_movies():
-    # TODO: Add option for multiple screens, can just keep the whole array and then pick which section we are looking at
-    # Maximum number of screen is 4 since max search result is 20 --> 20/6 = 4 pages to show all movies
-    # Have movies dynamically load
+btn_font = pygame.font.SysFont(gui_font, 20)
+next_txt = btn_font.render("Next", True, (30, 30, 30))
+back_txt = btn_font.render("Back", True, (30, 30, 30))
+def show_movies(movies, all_movies, total_movies, page):
+    # TODO: add loading icon!
     num_cols = 3
     top_padding = 110
     inter_padding = 100
@@ -195,13 +204,46 @@ def show_movies():
     char_lim = 20
     text_spacing = 3
     start = 0
+    loaded_movies = []
+    page = page
+
     if movies[0] is None:
         clear_movies()
         del(movies[0])
+
     else:
         # Check to see how many pages, etc.
-        if len(movies) > 6:
-            pass
+        if total_movies > 6:
+            start_index, end_index = 0, 6
+            next_btn = RoundedRectangle(SCREEN_WIDTH - 80, SCREEN_HEIGHT - 45, 75, 35, 10, (50, 180, 90))
+            back_btn = RoundedRectangle(SCREEN_WIDTH - 160, SCREEN_HEIGHT - 45, 75, 35, 10, (180, 50, 90))
+
+
+            pages = math.ceil(total_movies/6)
+
+
+            if page == 2:
+                if total_movies > 12:
+                    start_index, end_index = 6, 12
+                else:
+                    start_index, end_index = 6, total_movies
+            elif page == 3:
+                if total_movies > 18:
+                    start_index, end_index = 12, 18
+                else:
+                    start_index, end_index = 12, total_movies
+
+            elif page == 4:
+                if total_movies == 20:
+                    start_index, end_index = 18, 20
+                else:
+                    start_index, end_index = 18, total_movies
+
+            if not all_movies[start_index].loaded and not fast_search.active:
+                print("Have to load images")
+                load_movie_images(all_movies[start_index:end_index])
+
+            movies = all_movies[start_index:end_index]
 
         screen.fill(bg_color)
         draw_header()
@@ -243,6 +285,32 @@ def show_movies():
             else:
                 screen.blit(movies[movie].image, ((SCREEN_WIDTH - ((movies[movie].img_size[0]+inter_padding)* num_cols - inter_padding))/2 + (movie - num_cols*2) * (movies[movie].img_size[0]+inter_padding), top_padding + 2*(movies[movie].img_size[1]+inter_padding)))
 
+            if total_movies> 6:
+                pressed = pygame.mouse.get_pressed()[0]
+                if page < pages:
+                    if page < 4:
+                        next_btn.draw()
+                        screen.blit(next_txt, (next_btn.x + (next_btn.width - next_txt.get_width())/2, next_btn.y + (next_btn.height - next_txt.get_height())/2))
+                        if pressed and next_btn.onHover():
+                            start = time.clock()
+                            while pressed:
+                                pygame.event.get()
+                                pressed = pygame.mouse.get_pressed()[0]
+                            page += 1
+                            print(page)
+
+                if page > 1:
+                    back_btn.draw()
+                    screen.blit(back_txt, (back_btn.x + (back_btn.width - back_txt.get_width())/2, back_btn.y + (back_btn.height - back_txt.get_height())/2))
+                    if pressed and back_btn.onHover():
+                        start = time.clock()
+                        while pressed:
+                            pygame.event.get()
+                            pressed = pygame.mouse.get_pressed()[0]
+                        page -= 1
+                        print(page)
+
+    return page
 
 def clear_movies(show_text = True):
     screen.fill(bg_color)
@@ -266,7 +334,7 @@ class InputBox:
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.search_img = pygame.image.load('resources/search_icon.png').convert_alpha()
         self.active = False
-        self.movies = []
+        self.movies, self.all_movies = [], []
         self.total_movies = 0
         self.show_icon = show_icon
 
@@ -286,12 +354,15 @@ class InputBox:
                     self.text = self.default_text
                     self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                     self.active = not self.active
+                else:
+                    self.active = True
 
             else:
                 if self.active and self.text == '':
                     self.text = self.default_text
                     self.txt_surface = self.font.render(self.text, True, self.color_inactive)
                 self.active = False
+
             # Change the current color of the input box.
             self.color = self.color_active if self.active else self.color_inactive
 
@@ -308,8 +379,8 @@ class InputBox:
                 if self.active:
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
         if self.movies:
-            return self.movies, self.total_movies
-        return [], 0
+            return self.movies, self.all_movies, self.total_movies
+        return [], [], 0
 
     def draw(self, screen):
         # Blit the rect.
@@ -329,7 +400,7 @@ class InputBox:
     def search(self):
         print(self.text)
         if not extensive_search.active:
-            self.movies, self.total_movies = search_yify(self.text)
+            self.movies, self.all_movies, self.total_movies = search_yify(self.text)
         else:
             #TODO: Call Extensive Search function
             pass
@@ -355,6 +426,9 @@ class CheckBox:
     def draw(self):
         # Will handle drawing and toggle logic so only one call is needed for each object
         if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
+            while pygame.mouse.get_pressed()[0]:
+                pygame.event.get()
+                pygame.mouse.get_pressed()[0]
             self.active = not self.active
             self.timer = time.clock()
 
@@ -438,7 +512,6 @@ class ModeSelector():
 
         screen.blit(self.movie_text, (self.x + (self.width - self.movie_text.get_width())/2 , self.y + (self.height - self.movie_text.get_height())))
         screen.blit(self.tv_text, (self.x + self.width + (self.width - self.tv_text.get_width()) / 2, self.y + (self.height - self.tv_text.get_height())))
-
 
 class RoundedRectangle():
     def __init__(self, x, y, width, height, radius, color, hover_enabled=True, surf=screen):
@@ -661,9 +734,7 @@ def get_yify_data(movie):
 
     return resolutions, magnets, description, ratings, images, trailer_link
 
-
 def movie_preview(movie):
-    #FIXME: Fix long titles not displaying right
     running = True
     resolutions, links, description, ratings, images, trailer = get_yify_data(movie)
     rotten_imgs = []
@@ -828,19 +899,21 @@ def user_buttons():
     screen.blit(gear, (SCREEN_WIDTH - 44, 11))
     if setting_box.onHover() and pygame.mouse.get_pressed()[0]:
         settings_screen()
-
+page = 1
 running = True
 while running:
-    # TODO: Check Server Status every couple of minutes during the main loop (Do it in a separate thread Ideally)
+
     if movies:
-        show_movies()
+        page = show_movies(movies, all_movies, total_movies, page)
+    else:
+        page = 1
 
     draw_header()
     screen_copy = screen.copy()
 
     clock.tick(FPS)
     for event in pygame.event.get():
-        movies, total_movies = textInput_movie.handle_event(event)
+        movies, all_movies, total_movies = textInput_movie.handle_event(event)
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
