@@ -100,7 +100,13 @@ pc_stat, plex_stat = check_statuses()
 movies, all_movies = [], []
 
 """ Link Definintions """
+"""     Have to think about whether I want to list the first couple by the default order or if I want to sort by seeders from the beginning     """
 yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
+
+tpb = lambda name: 'https://thepiratebay.org/search/' + name.replace(" ", "%20") + '/0/99/200'
+
+rar_movies = lambda name: 'http://rarbg.to/torrents.php?search=' + name.replace(" ", "+") + '&category%5B%5D=14&category%5B%5D=48&category%5B%5D=17&category%5B%5D=44&category%5B%5D=45&category%5B%5D=42&category%5B%5D=46'
+rar_tv = lambda name: 'http://rarbg.to/torrents.php?search=' + name.replace(" ", "+") + '&category%5B%5D=18&category%5B%5D=41&category%5B%5D=49'
 
 
 class Movie:
@@ -124,6 +130,60 @@ class Movie:
             self.image = pygame.transform.smoothscale(self.image, self.img_size)
             self.loaded = True
 
+
+class Torrent:
+    def __init__(self, name, link, size, seeders, leechers, source):
+        self.name = name
+        self.link = link
+        self.size = size
+        self.seeders = seeders
+        self.leechers = leechers
+        self.source = source
+        self.hover = False
+
+        self.height = 80
+
+        self.title_font = pygame.font.SysFont(gui_font, 26)
+        self.data_font = pygame.font.SysFont(gui_font, 20)
+
+        self.name_text = self.title_font.render(self.name, True, (30,30,30))
+        self.name_text_hover = self.title_font.render(self.name, True, (20, 156, 250))
+        self.dl_btn = RoundedRectangle(0,0, 120, 30, 6, (240, 0, 42), text="Download", font_size=25)
+
+        self.size_text = self.data_font.render("Size: " + self.size, True, (30, 30, 30))
+        self.seeders_text = self.data_font.render("Seeders: " + self.seeders, True, (30, 30, 30))
+        self.leechers_text = self.data_font.render("Leechers: " + self.leechers, True, (30, 30, 30))
+        self.source_text = self.data_font.render("Source: " + self.source, True, (30, 30, 30))
+        self.text_offset = self.size_text.get_height()
+
+
+    def draw(self, y_index, y_offset):
+        # Background to fix text overlapping
+        pygame.draw.rect(screen, (bg_color[0] - 30, bg_color[1] - 15, bg_color[2] - 5), (0, 90 + y_offset + y_index * self.height, SCREEN_WIDTH, self.height + 2))
+        self.text_rect = pygame.Rect(10, 100 + y_offset + y_index * self.height, self.name_text.get_width(), self.name_text.get_height())
+
+        # Draw Border
+        if y_offset >= 0:
+            pygame.draw.rect(screen, (30, 30, 30), (0, 90 + y_offset + y_index*self.height, SCREEN_WIDTH, self.height + 2), 2)
+
+        # Draw text - FIXME: Probably don't need different colored text since I can't get much clean data from the site
+        if self.text_rect.collidepoint(pygame.mouse.get_pos()):
+            screen.blit(self.name_text_hover, self.text_rect)
+            self.hover = True
+        else:
+            screen.blit(self.name_text, self.text_rect)
+            self.hover = False
+
+        # Download button
+        self.dl_btn.x = SCREEN_WIDTH - self.dl_btn.width - 30 #FIXME: Change the subtraction to account for scroll scroll bar
+        self.dl_btn.y = 90 + y_offset + y_index*self.height + self.height - self.dl_btn.height - 10
+        self.dl_btn.draw()
+
+        # Display Torrent data
+        screen.blit(self.size_text, (10, 90 + y_offset + y_index * self.height + self.height - self.text_offset))
+        screen.blit(self.seeders_text, (30 + self.size_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
+        screen.blit(self.leechers_text, (50 + self.size_text.get_width() + self.seeders_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
+        screen.blit(self.source_text, (70 + self.size_text.get_width() + self.seeders_text.get_width() + self.leechers_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
 
 total_movies = 0
 
@@ -308,6 +368,10 @@ def show_movies(movies, all_movies, total_movies, page):
 
     return page
 
+def show_links(movies):
+    for movie in range(len(movies)):
+        movies[movie].draw(movie, 0)
+
 def clear_movies(show_text = True):
     screen.fill(bg_color)
     draw_header()
@@ -318,7 +382,6 @@ def clear_movies(show_text = True):
 # TODO: Move drawing functions and classes to another file
 
 class InputBox:
-    # TODO: Add cursor support to edit parts of the input
     def __init__(self, x, y, w, h, text='', show_icon=True):
         self.rect = pygame.Rect(x, y, w, h)
         self.color_inactive = (100,100,100)
@@ -390,7 +453,6 @@ class InputBox:
                             self.text = self.text[:self.pointer] + event.unicode + self.text[self.pointer:]
                         else:
                             self.text += event.unicode
-                        # FIXME: Not working
                         if event.key != pygame.K_LSHIFT and event.key != pygame.K_RSHIFT:
                             self.pointer += 1
                 # Re-render the text.
@@ -564,6 +626,7 @@ class RoundedRectangle():
             self.text_render = self.font.render(self.text, True, (30, 30, 30))
 
     def draw(self):
+        self.col_rect = pygame.Rect(self.x, self.y, self.width, self.height)
         if self.onHover() and self.hover_check:
             # Body
             pygame.draw.rect(self.surf, self.hover_color, (self.x, self.y + self.radius, self.width, self.height - self.radius*2))
@@ -658,11 +721,14 @@ def settings_screen():
     # TODO: Settings
     """
     Reboot Computer button,                                                                                             - Done
+    Restart Plex
     Server and Computer status,                                                                                         - Done
     status refresh button,                                                                                              - Done
+    Disable confirmation screen (Resets on restart)
     Server mode OR Standalone mode
     Open config file?,
     Sort Priority: Seeders, File Size, Date Uploaded, Default order <-- Probably gonna be default. rest can come later
+        - Write a sorting algorithm!
     """
     start = time.clock()
     running = True
@@ -809,6 +875,44 @@ def get_yify_data(movie):
         print(trailer_link)
 
     return resolutions, magnets, description, ratings, images, trailer_link
+
+def search_tpb(name):
+    num_results = 5
+    torrents = []
+    try:
+        start = time.clock()
+        req = Request(tpb(str(name)), headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+    except:
+        print("That is an invalid URL")
+    else:
+        # print(soup.prettify())
+        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
+
+    title = soup.findAll('div', class_="detName")
+    size = soup.findAll('font', class_='detDesc')
+    title = title[:num_results]
+    size = size[:num_results]
+    # raw_stats = soup.findAll('td')
+    raw_stats = soup.find_all('td', {'align': 'right'})
+    raw_stats = raw_stats[:num_results * 2]
+    magnets = soup.findAll('a', {'title': 'Download this torrent using magnet'})
+
+    for i in range(0, num_results * 2, 2):
+        name = title[int(i / 2)].text.replace('\n', "")[1:]
+        file_size = size[int(i / 2)].text.split(',')[1].replace(" Size ", "")
+        seeders = int(raw_stats[i].text)
+        leechers = int(raw_stats[i + 1].text)
+        magnet = magnets[int(i / 1)]['href']
+
+        print(name)
+        print(file_size)
+        print("Seeders: %i Leechers: %i" % (seeders, leechers))
+        print(magnet)
+        torrents.append(Torrent(name, magnet, str(file_size), str(seeders), str(leechers), 'TPB'))
+
+    return torrents
 
 def movie_preview(movie):
     running = True
@@ -986,10 +1090,12 @@ while running:
     if movies:
         page = show_movies(movies, all_movies, total_movies, page)
     else:
+        #FIXME: reset page when searching
         page = 1
 
     draw_header()
     screen_copy = screen.copy()
+
 
     clock.tick(FPS)
     for event in pygame.event.get():
