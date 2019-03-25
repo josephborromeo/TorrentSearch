@@ -88,6 +88,8 @@ plex_server = True
 def check_statuses():
     # FIXME: change so that it checks only for local folder if server is false
     # TODO: Can have it create a folder if set to local mode
+    # TODO: Get HDD Space using:                and then show how much free/ used space there is !
+    #total, used, free = shutil.disk_usage("\\")
     pc, plex = False, False
     if os.path.exists(path_to_server):
         pc = True
@@ -660,6 +662,23 @@ class RoundedRectangle():
             return True
         return False
 
+class ProgressBar():
+    def __init__(self, x, y, percentage, surf=screen):
+        self.width = 85
+        self.height = 18
+        self.rect = pygame.Rect(x, y, self.width, self.height)
+        self.font = pygame.font.SysFont(gui_font, 20)
+        self.percentage = percentage
+        self.text = self.font.render(str(self.percentage)+"%", True, (30, 30, 30))
+        self.surf = surf
+
+    def draw(self):
+        # Progress
+        pygame.draw.rect(self.surf, (30, 240, 60), (self.rect.x, self.rect.y, int(self.rect.w * (self.percentage/100)), self.rect.h))
+        #Outline
+        pygame.draw.rect(self.surf, (30, 30, 30), self.rect, 2)
+
+        self.surf.blit(self.text, (self.rect.x + self.rect.w + 5, self.rect.y))
 
 def confirmation_screen(text='', background=''):
     text = "Are you sure you want to " + text + "?"
@@ -798,6 +817,63 @@ def settings_screen():
 
     screen.blit(bg, (0, 0))
     pygame.display.update()
+
+def donwloads_screen():
+    running = True
+    bg = screen_copy
+    start = time.clock()
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
+    overlay.set_alpha(150)
+    # Main Body
+    width = 700
+    height = 750
+    body_rect = pygame.Rect(int((SCREEN_WIDTH-width)/2), int((SCREEN_HEIGHT-height)/2), width, height)
+    body = RoundedRectangle(body_rect.x, body_rect.y, body_rect.w, body_rect.h, 5, (120, 120, 240, 240), hover_enabled=False, surf=overlay)
+    # Exit Button
+    exit_size = 40
+    padding = 12
+    exit_rect = pygame.Rect(int((SCREEN_WIDTH-width)/2) + width - exit_size - padding, int((SCREEN_HEIGHT-height)/2) + padding, exit_size, exit_size)
+    exit_btn = RoundedRectangle(exit_rect.x, exit_rect.y, exit_rect.w, exit_rect.h, 10, (245, 66, 100), surf=overlay)
+    # Refresh Button
+    refresh_rect = pygame.Rect(int((SCREEN_WIDTH - width) / 2) + padding, int((SCREEN_HEIGHT - height) / 2) + padding, 130, exit_size)
+    reset_btn = RoundedRectangle(refresh_rect.x, refresh_rect.y, refresh_rect.w, refresh_rect.h, 10, (245, 66, 100), surf=overlay, text="Refresh", font_size=28)
+
+    # Text
+    title_font = pygame.font.SysFont(gui_font, 48)
+    title = title_font.render("Torrents", True, (30, 30, 30))
+
+    prog = ProgressBar(600, 100, 93, surf=overlay)
+
+    while running:
+        screen.blit(bg, (0, 0))
+
+        body.draw()
+        exit_btn.draw()
+        reset_btn.draw()
+        pygame.draw.line(overlay, (30, 30, 30, 220), (body_rect.x, body_rect.y + padding*2 + exit_size), (body_rect.x + body_rect.w - 1, body_rect.y + padding*2 + exit_size), 2)
+
+
+        prog.draw()
+
+        overlay.blit(title, (body_rect.x + (body_rect.w - title.get_width())/2, body_rect.y + 10))
+
+        screen.blit(overlay, (0, 0))
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONUP and time.clock() - start > 0.4:
+                if not body_rect.collidepoint(pygame.mouse.get_pos()):
+                    running = False
+                    screen.blit(bg, (0,0))
+                if exit_btn.onHover():
+                    running = False
+                    screen.blit(bg, (0, 0))
+
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        pygame.display.update()
+
 
 def get_yify_data(movie):
     link = movie.link
@@ -1070,6 +1146,7 @@ extensive_search = CheckBox(230, 57, "Extensive Search")
 fast_search = CheckBox(385, 57, "Fast Search")
 mode_select = ModeSelector(10, 53)
 setting_box = RoundedRectangle(SCREEN_WIDTH - 45, 10, 35, 35, 0, (130, 90, 95))
+download_btn = RoundedRectangle(SCREEN_WIDTH - 130, 53, 120, 30, 4, (90, 90, 176), text="Downloads", font_size=25)
 def user_buttons():
     if not mode_select.movie_mode:
         extensive_search.active = True
@@ -1082,6 +1159,10 @@ def user_buttons():
     screen.blit(gear, (SCREEN_WIDTH - 44, 11))
     if setting_box.onHover() and pygame.mouse.get_pressed()[0]:
         settings_screen()
+    # Downloads button
+    download_btn.draw()
+    if download_btn.onHover() and pygame.mouse.get_pressed()[0]:
+        donwloads_screen()
 
 page = 1
 running = True
