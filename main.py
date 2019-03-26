@@ -1,9 +1,6 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os, textwrap, threading, webbrowser, math
+import pygame, sys, time, io, os, textwrap, threading, webbrowser, math, shutil
 from bs4 import BeautifulSoup
-from pygame import gfxdraw
-
-
 
 """ URLLIB HEADER"""
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -80,18 +77,19 @@ YIFY:
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
 path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works a qbittorent URL
-plex_server = True
+plex_server = False
 
 
 """     STATUS CHECKS       """
 def check_statuses():
     # FIXME: change so that it checks only for local folder if server is false
-    # TODO: Can have it create a folder if set to local mode
-    # TODO: Get HDD Space using:                and then show how much free/ used space there is !
-    #total, used, free = shutil.disk_usage("\\")
     pc, plex = False, False
+
     if os.path.exists(path_to_server):
         pc = True
+    if pc:
+        total, used, free = shutil.disk_usage("\\")
+
     # TODO: implement check for plex server status
     return pc, plex
 
@@ -193,6 +191,11 @@ class Download:
         # Buttons for start/stop/pausing torrents
         self.bg_color = (120, 120, 240, 240)
 
+        #self.start_btn = RoundedRectangle
+        #self.stop_btn = RoundedRectangle
+        #self.delete_btn = RoundedRectangle
+        # TODO: Implement start/stop/delete buttons
+
     def draw(self):
         # Background
         pygame.draw.rect(self.surf, self.bg_color, self.rect)
@@ -215,7 +218,6 @@ def load_movie_images(movies):
 
 def search_yify(name):
     print("SEARCHING")
-    # FIXME: Speed up opening links -> takes too long for the initial load which makes everything seem slow
     # FIXED THE DOWNLOAD SPEED! now takes ~0.16s per image compared to 0.6 -> ~4x speedup
     movies, all_movies = [], []
     try:
@@ -290,6 +292,8 @@ def search_tpb(name):
     raw_stats = soup.find_all('td', {'align': 'right'})
     raw_stats = raw_stats[:num_results * 2]
     magnets = soup.findAll('a', {'title': 'Download this torrent using magnet'})
+    if len(title) < num_results:
+        num_results = len(title)
     if len(title) > 0:
         for i in range(0, num_results * 2, 2):
             name = title[int(i / 2)].text.replace('\n', "")[1:]
@@ -438,7 +442,10 @@ def clear_movies(show_text = True):
     screen.fill(bg_color)
     draw_header()
     if show_text:
-        text = pygame.font.SysFont(gui_font, 72).render("No Movies Found", True, (240, 30, 15))
+        if mode_select.movie_mode:
+            text = pygame.font.SysFont(gui_font, 72).render("No Movies Found", True, (240, 30, 15))
+        else:
+            text = pygame.font.SysFont(gui_font, 72).render("No Shows Found", True, (240, 30, 15))
         screen.blit(text, (((SCREEN_WIDTH - text.get_width()) / 2), 150))
 
 # TODO: Move drawing functions and classes to another file
@@ -460,12 +467,11 @@ class InputBox:
         self.show_icon = show_icon
         self.pointer = 0
         self.cursor_active = True
-        self.cursor_rate = 30
+        self.cursor_rate = 35
         self.cursor_count = 0
         self.char_lim = char_lim
 
     def handle_event(self, event):
-
         if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
             # If the user clicked on the input_box rect.
             if self.rect.collidepoint(event.pos):
@@ -499,8 +505,9 @@ class InputBox:
                     self.search()
                     self.pointer = 0
                 elif event.key == pygame.K_BACKSPACE:
-                    self.text = self.text[:self.pointer-1] + self.text[self.pointer:]
-                    self.pointer -= 1
+                    if self.pointer > 0:
+                        self.text = self.text[:self.pointer-1] + self.text[self.pointer:]
+                        self.pointer -= 1
                 elif event.key == pygame.K_DELETE:
                     self.text = self.text[:self.pointer] + self.text[self.pointer+1:]
                 elif event.key == pygame.K_RIGHT:
@@ -522,13 +529,7 @@ class InputBox:
                 # Re-render the text.
                 if self.active:
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
-        """
-        if not extensive_search.active:
-            if self.movies:
-                return self.movies, self.all_movies, self.total_movies
-        if extensive_search.active:
-            return self.movies, self.movies, len(self.movies)
-        """
+
         return self.movies, self.all_movies, self.total_movies
 
 
@@ -847,8 +848,9 @@ def settings_screen():
     while running:
         screen.blit(bg, (0, 0))
         body.draw()
-        reboot_btn.draw()
-        restart_plex.draw()
+        if plex_server:
+            reboot_btn.draw()
+            restart_plex.draw()
         pygame.draw.line(overlay, (80, 80, 80), (int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), (int((SCREEN_WIDTH - width)/2) + width, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), 2)
 
         # Exit Button
@@ -862,11 +864,12 @@ def settings_screen():
         else:
             pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + pc_status.get_width() + 60, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(pc_status.get_height()/2) + 15), stat_radius)
 
-        overlay.blit(plex_status, (int((SCREEN_WIDTH - width)/2) + width/2 - 70, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15))
-        if plex_stat:
-            pygame.draw.circle(overlay, (20,255,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
-        else:
-            pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
+        if plex_server:
+            overlay.blit(plex_status, (int((SCREEN_WIDTH - width)/2) + width/2 - 70, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15))
+            if plex_stat:
+                pygame.draw.circle(overlay, (20,255,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
+            else:
+                pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + int(width/2) + plex_status.get_width() - 40, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(plex_status.get_height()/2) + 15), stat_radius)
 
 
         refresh_status_btn.draw()
@@ -881,10 +884,14 @@ def settings_screen():
                 if reboot_btn.onHover() and plex_server:
                     # TODO: Actually make it reboot the computer
                     print("REBOOT")
+                    if confirmation_screen("reboot the plex host computer", overlay):
+                        print("ACTUALLY REBOOTING COMPUTER")
 
                 if restart_plex.onHover() and plex_server:
                     # TODO: Actually make it restart plex
                     print("RESTART")
+                    if confirmation_screen("restart the plex instance?", overlay):
+                        print("ACTUALLY RESTARING PLEX")
 
                 if refresh_status_btn.onHover():
                     print("Checking Status")
@@ -1018,7 +1025,6 @@ def get_yify_data(movie):
                     ratings[rating] = ratings[rating][0] + '.0'
         print(ratings)
         # Rating Images
-        # FIXME: Could have all the images pre-downloaded and then just check which one is being used - faster
         raw_images = soup.findAll('a', class_="icon")
         raw_images = raw_images[:-1]
         if raw_images:
@@ -1032,7 +1038,60 @@ def get_yify_data(movie):
 
     return resolutions, magnets, description, ratings, images, trailer_link
 
+def recommended_movies(link, background):
+    bg = background
+    try:
+        start = time.clock()
+        req = Request(link, headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+    except:
+        print("Unable to get Movie Data")
+    else:
+        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
 
+        # Get names and image URLs
+        raw_movies = soup.find('div', id="movie-related").findAll('a')
+        rec_movies = []
+        for movie in raw_movies:
+            title = movie['title']
+            img_link = movie.find('img')['src']
+            link = movie['href']
+            rec_movies.append(Movie(title, link, img_link))
+
+        load_movie_images(rec_movies)
+
+    running = True
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
+
+    body_rect = pygame.Rect(10, (SCREEN_HEIGHT - 500)/2, SCREEN_WIDTH - 20, 500)
+    spacing = 20
+    char_lim = 20
+    font = pygame.font.SysFont(gui_font, 20)
+
+    while running:
+        screen.blit(bg, (0, 0))
+        pygame.draw.rect(overlay,  (40, 95, 174, 200), body_rect)
+
+        for movie in range(len(rec_movies)):
+            name = rec_movies[movie].name
+            name = textwrap.fill(name, char_lim)
+            name = name.split("\n")
+            text_list = []
+            for word in range(len(name)):
+                text = font.render(name[word], True, (0, 0, 0))
+                text_list.append(text)
+            overlay.blit(rec_movies[movie].image, (body_rect.x + (body_rect.w - (len(rec_movies)*rec_movies[movie].image.get_width()) - ((len(rec_movies)-1)*spacing))/2 + (rec_movies[movie].image.get_width() + spacing)*movie, body_rect.y + 20))
+
+
+        screen.blit(overlay, (0, 0))
+
+        clock.tick()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+        pygame.display.update()
 
 def movie_preview(movie):
     running = True
@@ -1072,7 +1131,7 @@ def movie_preview(movie):
     for i in movie_name:
         title_text.append(font.render(i, True, (40, 40, 40)))
 
-
+    rec_movies = synopsis_font.render("Recommended", True, (20, 20, 20))
     back = font.render("Back", True, (40,40,40))
     start = time.clock()
     while running:
@@ -1105,7 +1164,6 @@ def movie_preview(movie):
         # Trailer Button
         if trailer != '':
             trailer_text = synopsis_font.render("Trailer", True, (20, 20,20))
-
             if pos[0] > SCREEN_WIDTH - 120 and pos[0] < SCREEN_WIDTH-20 and pos[1] > image.get_height() + bottom_text_y and pos[1] < image.get_height() + bottom_text_y + 40:
                 pygame.draw.rect(screen, (65, 175, 45),(SCREEN_WIDTH - 120, image.get_height() + bottom_text_y, 100, 40))
                 if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.3:
@@ -1115,6 +1173,15 @@ def movie_preview(movie):
                 pygame.draw.rect(screen, (50, 160, 30), (SCREEN_WIDTH - 120, image.get_height() + bottom_text_y, 100, 40))
             screen.blit(trailer_text, (SCREEN_WIDTH - 120 + (100 - trailer_text.get_width()) / 2, image.get_height() + bottom_text_y + trailer_text.get_height()/2 - 2))
 
+        # Recommended Movies Button
+        if pos[0] > SCREEN_WIDTH - 200 and pos[0] < SCREEN_WIDTH - 20 and pos[1] > image.get_height() + bottom_text_y - 50 and pos[1] < image.get_height() + bottom_text_y - 10:
+            pygame.draw.rect(screen, (155, 160, 255), (SCREEN_WIDTH - 200, image.get_height() + bottom_text_y - 50, 180, 40))
+            if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.3:
+                #TODO: Recommended movies screen + scraper
+                recommended_movies(movie.link, background)
+        else:
+            pygame.draw.rect(screen, (140, 145, 255), (SCREEN_WIDTH - 200, image.get_height() + bottom_text_y - 50, 180, 40))
+        screen.blit(rec_movies, (SCREEN_WIDTH - 200 + (180 - rec_movies.get_width()) / 2, image.get_height() + bottom_text_y - 50 + (40 - rec_movies.get_height())/2 ))
 
         # Back Button
         pygame.draw.rect(screen, (190, 30, 50), (SCREEN_WIDTH - 160, SCREEN_HEIGHT - 70, 140, 50))
@@ -1160,8 +1227,8 @@ def movie_preview(movie):
                 pygame.quit()
                 sys.exit()
         pygame.display.update()
-    # TODO: Extra features will include relevant movies and such
     time.sleep(0.1)
+
 
 # Input boxes - Movie
 textInput_movie = InputBox(10, 10, SCREEN_WIDTH - 65, 35, "Search")
