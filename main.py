@@ -11,7 +11,6 @@ hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML,
        'Connection': 'keep-alive'}
 
 """ PYGAME SETTINGS """
-
 # Center Window in display
 os.environ['SDL_VIDEO_CENTERED'] = '1'
 
@@ -61,7 +60,7 @@ EZTV: Just not a good selection
     - Auto-format TV show search terms (e.g. S__E__)
     - Automatically set download path when choosing to search for either a Movie of TV Show
     
-    - Websites other than YIFY, show: Description, File Size, Seeders   - basically a list view
+    - Websites other than YIFY, show: Description, File Size, Seeders   - basically a list view                         - DONE!
         - Have a checkbox to choose "extensive search" to check other websites                                          - DONE!
         
     - Movie trailer button in movie screen                                                                              - DONE!
@@ -80,7 +79,7 @@ YIFY:
 #TODO: Place these in a configuration file, have them changeable through the gui
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
-path_to_server = "//MEDIA-SERVER/E/"
+path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works a qbittorent URL
 plex_server = True
 
 
@@ -149,7 +148,6 @@ class Torrent:
         self.data_font = pygame.font.SysFont(gui_font, 20)
 
         self.name_text = self.title_font.render(self.name, True, (30,30,30))
-        self.name_text_hover = self.title_font.render(self.name, True, (20, 156, 250))
         self.dl_btn = RoundedRectangle(0,0, 120, 30, 6, (240, 0, 42), text="Download", font_size=25)
 
         self.size_text = self.data_font.render("Size: " + self.size, True, (30, 30, 30))
@@ -165,19 +163,12 @@ class Torrent:
         self.text_rect = pygame.Rect(10, 100 + y_offset + y_index * self.height, self.name_text.get_width(), self.name_text.get_height())
 
         # Draw Border
-        if y_offset >= 0:
-            pygame.draw.rect(screen, (30, 30, 30), (0, 90 + y_offset + y_index*self.height, SCREEN_WIDTH, self.height + 2), 2)
+        pygame.draw.rect(screen, (30, 30, 30), (0, 90 + y_offset + y_index*self.height, SCREEN_WIDTH, self.height + 2), 2)
 
-        # Draw text - FIXME: Probably don't need different colored text since I can't get much clean data from the site
-        if self.text_rect.collidepoint(pygame.mouse.get_pos()):
-            screen.blit(self.name_text_hover, self.text_rect)
-            self.hover = True
-        else:
-            screen.blit(self.name_text, self.text_rect)
-            self.hover = False
+        screen.blit(self.name_text, self.text_rect)
 
         # Download button
-        self.dl_btn.x = SCREEN_WIDTH - self.dl_btn.width - 30 #FIXME: Change the subtraction to account for scroll scroll bar
+        self.dl_btn.x = SCREEN_WIDTH - self.dl_btn.width - 10
         self.dl_btn.y = 90 + y_offset + y_index*self.height + self.height - self.dl_btn.height - 10
         self.dl_btn.draw()
 
@@ -186,6 +177,28 @@ class Torrent:
         screen.blit(self.seeders_text, (30 + self.size_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
         screen.blit(self.leechers_text, (50 + self.size_text.get_width() + self.seeders_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
         screen.blit(self.source_text, (70 + self.size_text.get_width() + self.seeders_text.get_width() + self.leechers_text.get_width(), 90 + y_offset + y_index * self.height + self.height - self.text_offset))
+
+
+class Download:
+    def __init__(self, x, y, w, h, name, id, progress, dl_speed, ul_speed, size, surf=screen):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.name = name
+        self.progress = progress
+        self.dl_speed = dl_speed
+        self.ul_speed = ul_speed
+        self.size = size
+        self.id = id
+        self.surf = surf
+        self.progress_bar = ProgressBar(surf=self.surf)
+        # Buttons for start/stop/pausing torrents
+        self.bg_color = (120, 120, 240, 240)
+
+    def draw(self):
+        # Background
+        pygame.draw.rect(self.surf, self.bg_color, self.rect)
+        #Border
+        pygame.draw.rect(self.surf, (30, 30, 30), self.rect, 2)
+
 
 total_movies = 0
 
@@ -254,6 +267,41 @@ def search_yify(name):
         movies, all_movies = [None], [None]
         print("No Movies Found")
         return movies, all_movies, 0
+
+def search_tpb(name):
+    num_results = 6
+    torrents = []
+    try:
+        start = time.clock()
+        req = Request(tpb(str(name)), headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+    except:
+        print("That is an invalid URL")
+    else:
+        # print(soup.prettify())
+        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
+
+    title = soup.findAll('div', class_="detName")
+    size = soup.findAll('font', class_='detDesc')
+    title = title[:num_results]
+    size = size[:num_results]
+    # raw_stats = soup.findAll('td')
+    raw_stats = soup.find_all('td', {'align': 'right'})
+    raw_stats = raw_stats[:num_results * 2]
+    magnets = soup.findAll('a', {'title': 'Download this torrent using magnet'})
+    if len(title) > 0:
+        for i in range(0, num_results * 2, 2):
+            name = title[int(i / 2)].text.replace('\n', "")[1:]
+            file_size = size[int(i / 2)].text.split(',')[1].replace(" Size ", "")
+            seeders = int(raw_stats[i].text)
+            leechers = int(raw_stats[i + 1].text)
+            magnet = magnets[int(i / 1)]['href']
+            torrents.append(Torrent(name, magnet, str(file_size), str(seeders), str(leechers), 'TPB'))
+    else:
+        clear_movies()
+
+    return torrents
 
 def show_movies(movies, all_movies, total_movies, page):
     # TODO: add loading icon!
@@ -370,9 +418,21 @@ def show_movies(movies, all_movies, total_movies, page):
 
     return page
 
-def show_links(movies):
+def show_links(movies, offset, bg):
+    pygame.draw.rect(screen, bg_color, (0, 90, SCREEN_WIDTH, SCREEN_HEIGHT))
+    scrolling = False
+    if len(movies) > 9:
+        scrolling = True
     for movie in range(len(movies)):
-        movies[movie].draw(movie, 0)
+        if scrolling:
+            movies[movie].draw(movie, -offset)
+        else:
+            movies[movie].draw(movie, 0)
+
+        if movies[movie].dl_btn.onHover() and pygame.mouse.get_pressed()[0]:
+            dl_conf = confirmation_screen("confirm this download", bg)
+
+
 
 def clear_movies(show_text = True):
     screen.fill(bg_color)
@@ -384,7 +444,7 @@ def clear_movies(show_text = True):
 # TODO: Move drawing functions and classes to another file
 
 class InputBox:
-    def __init__(self, x, y, w, h, text='', show_icon=True):
+    def __init__(self, x, y, w, h, text='', show_icon=True, char_lim=True):
         self.rect = pygame.Rect(x, y, w, h)
         self.color_inactive = (100,100,100)
         self.color_active = (200,200,200)
@@ -402,8 +462,10 @@ class InputBox:
         self.cursor_active = True
         self.cursor_rate = 30
         self.cursor_count = 0
+        self.char_lim = char_lim
 
     def handle_event(self, event):
+
         if event.type == pygame.MOUSEBUTTONDOWN and pygame.mouse.get_pressed()[0]:
             # If the user clicked on the input_box rect.
             if self.rect.collidepoint(event.pos):
@@ -460,10 +522,14 @@ class InputBox:
                 # Re-render the text.
                 if self.active:
                     self.txt_surface = self.font.render(self.text, True, self.text_color)
+        """
         if not extensive_search.active:
             if self.movies:
                 return self.movies, self.all_movies, self.total_movies
-        return [], [], 0
+        if extensive_search.active:
+            return self.movies, self.movies, len(self.movies)
+        """
+        return self.movies, self.all_movies, self.total_movies
 
 
     def draw(self, screen):
@@ -493,12 +559,23 @@ class InputBox:
             screen.blit(self.search_img, (self.rect.x + self.rect.w - 35, self.rect.y + 1))
 
     def search(self):
+        global page, disp_mode, scroll_offset
+        page = 1
         print(self.text)
+        if not mode_select.movie_mode:
+            disp_mode = 'list'
+            if textInput_season.text != '':
+                self.text = self.text + " S" + textInput_season.text
+                if textInput_episode.text != '':
+                    self.text = self.text + "E" + textInput_tv.text
+
         if not extensive_search.active:
+            disp_mode = 'thumb'
             self.movies, self.all_movies, self.total_movies = search_yify(self.text)
         else:
-            #TODO: Call Extensive Search function
-            pass
+            disp_mode = 'list'
+            self.movies = search_tpb(self.text)
+        scroll_offset = 0
         self.text = 'Search'
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
         self.active = False
@@ -740,12 +817,11 @@ def settings_screen():
     # TODO: Settings
     """
     Reboot Computer button,                                                                                             - Done
-    Restart Plex
-    Server and Computer status,                                                                                         - Done
-    status refresh button,                                                                                              - Done
-    Disable confirmation screen (Resets on restart)
-    Server mode OR Standalone mode
-    Open config file?,
+    Restart Plex Button                                                                                                 - Done
+    Server and Computer status,                                                                                         - DONE
+    status refresh button,                                                                                              - DONE
+    Disable confirmation screen when downloading(Resets on restart)
+    Open config file? -> Server mode OR Standalone mode
     Sort Priority: Seeders, File Size, Date Uploaded, Default order <-- Probably gonna be default. rest can come later
         - Write a sorting algorithm!
     """
@@ -761,7 +837,8 @@ def settings_screen():
     rect = pygame.Rect(int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2), width, height)
     body = RoundedRectangle(int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2), width, height, 15, (232, 220, 220), hover_enabled=False, surf=overlay)
     exit_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + width - 50, int((SCREEN_HEIGHT - height)/2) + 10, 40, 40, 10, (180, 80, 80), surf=overlay)
-    reboot_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + int((width - 250)/2), int((SCREEN_HEIGHT - height)/2) + height - 45, 250, 35, 5, (255, 200, 100), font_size=25, text="REBOOT COMPUTER", surf=overlay)
+    reboot_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + int((width/2 - 250)/2), int((SCREEN_HEIGHT - height)/2) + height - 45, 250, 35, 5, (255, 200, 100), font_size=25, text="REBOOT COMPUTER", surf=overlay)
+    restart_plex = RoundedRectangle(int((SCREEN_WIDTH - width)/2 + width - 250 - int((width/2 - 250)/2)), int((SCREEN_HEIGHT - height)/2) + height - 45, 250, 35, 5, (255, 200, 100), font_size=25, text="RESTART PLEX", surf=overlay)
     stat_radius = 16
     pc_status = setting_font.render("PC Status:", True, (30,30,30))
     plex_status = setting_font.render("Plex Status:", True, (30,30,30))
@@ -771,6 +848,7 @@ def settings_screen():
         screen.blit(bg, (0, 0))
         body.draw()
         reboot_btn.draw()
+        restart_plex.draw()
         pygame.draw.line(overlay, (80, 80, 80), (int((SCREEN_WIDTH - width)/2), int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), (int((SCREEN_WIDTH - width)/2) + width, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 8), 2)
 
         # Exit Button
@@ -803,6 +881,10 @@ def settings_screen():
                 if reboot_btn.onHover() and plex_server:
                     # TODO: Actually make it reboot the computer
                     print("REBOOT")
+
+                if restart_plex.onHover() and plex_server:
+                    # TODO: Actually make it restart plex
+                    print("RESTART")
 
                 if refresh_status_btn.onHover():
                     print("Checking Status")
@@ -851,13 +933,11 @@ def donwloads_screen():
         exit_btn.draw()
         reset_btn.draw()
         pygame.draw.line(overlay, (30, 30, 30, 220), (body_rect.x, body_rect.y + padding*2 + exit_size), (body_rect.x + body_rect.w - 1, body_rect.y + padding*2 + exit_size), 2)
-
-
         prog.draw()
 
         overlay.blit(title, (body_rect.x + (body_rect.w - title.get_width())/2, body_rect.y + 10))
-
         screen.blit(overlay, (0, 0))
+
         clock.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONUP and time.clock() - start > 0.4:
@@ -952,43 +1032,7 @@ def get_yify_data(movie):
 
     return resolutions, magnets, description, ratings, images, trailer_link
 
-def search_tpb(name):
-    num_results = 5
-    torrents = []
-    try:
-        start = time.clock()
-        req = Request(tpb(str(name)), headers=hdr)
-        html = urlopen(req)
-        soup = BeautifulSoup(html.read(), 'html.parser')
-    except:
-        print("That is an invalid URL")
-    else:
-        # print(soup.prettify())
-        print("Time to retrieve Page: %.2fs" %(time.clock() - start))
 
-    title = soup.findAll('div', class_="detName")
-    size = soup.findAll('font', class_='detDesc')
-    title = title[:num_results]
-    size = size[:num_results]
-    # raw_stats = soup.findAll('td')
-    raw_stats = soup.find_all('td', {'align': 'right'})
-    raw_stats = raw_stats[:num_results * 2]
-    magnets = soup.findAll('a', {'title': 'Download this torrent using magnet'})
-
-    for i in range(0, num_results * 2, 2):
-        name = title[int(i / 2)].text.replace('\n', "")[1:]
-        file_size = size[int(i / 2)].text.split(',')[1].replace(" Size ", "")
-        seeders = int(raw_stats[i].text)
-        leechers = int(raw_stats[i + 1].text)
-        magnet = magnets[int(i / 1)]['href']
-
-        print(name)
-        print(file_size)
-        print("Seeders: %i Leechers: %i" % (seeders, leechers))
-        print(magnet)
-        torrents.append(Torrent(name, magnet, str(file_size), str(seeders), str(leechers), 'TPB'))
-
-    return torrents
 
 def movie_preview(movie):
     running = True
@@ -1137,7 +1181,11 @@ def draw_header():
         textInput_episode.draw(screen)
 
     font = pygame.font.SysFont(gui_font, 26)
-    result_text = font.render("Results Found: " + str(total_movies), True, (230, 230, 230))
+    if disp_mode == 'thumb':
+        result_text = font.render("Results Found: " + str(total_movies), True, (230, 230, 230))
+    else:
+        result_text = font.render("Results Found: " + str(len(movies)), True, (230, 230, 230))
+
     screen.blit(result_text, (505, 56))
     user_buttons()
 
@@ -1164,26 +1212,40 @@ def user_buttons():
     if download_btn.onHover() and pygame.mouse.get_pressed()[0]:
         donwloads_screen()
 
-page = 1
+torrents = []
+disp_mode = 'thumb'
+page, scroll_offset = 1, 0
 running = True
 while running:
 
     if movies:
-        page = show_movies(movies, all_movies, total_movies, page)
+        if disp_mode == 'thumb':
+            scroll_offset = 0
+            page = show_movies(movies, all_movies, total_movies, page)
+        else:
+            show_links(movies, scroll_offset, screen_copy)
     else:
-        #FIXME: reset page when searching
         page = 1
 
     draw_header()
     screen_copy = screen.copy()
-
 
     clock.tick(FPS)
     for event in pygame.event.get():
         if mode_select.movie_mode:
             movies, all_movies, total_movies = textInput_movie.handle_event(event)
         else:
+            _ = textInput_episode.handle_event(event)
+            _ = textInput_season.handle_event(event)
             _ = textInput_tv.handle_event(event)
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if movies and disp_mode == 'list':
+                if event.button == 5 and scroll_offset < 80*len(movies) - SCREEN_HEIGHT + 90:
+                    scroll_offset += 10
+                if event.button == 4 and scroll_offset >= 10:
+                    scroll_offset -= 10
+
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
