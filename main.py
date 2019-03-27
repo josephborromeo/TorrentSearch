@@ -76,24 +76,27 @@ YIFY:
 #TODO: Place these in a configuration file, have them changeable through the gui
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
-path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works a qbittorent URL
-plex_server = True
-
-
+path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works as a qbittorent URL
+#path_to_server = '\\'  #TODO: Remove this after testing
+plex_server = False
+convert = lambda value: value/1e9
 """     STATUS CHECKS       """
 def check_statuses():
-    # FIXME: change so that it checks only for local folder if server is false
     pc, plex = False, False
-
+    total, used, free = 0, 0, 0
     if os.path.exists(path_to_server):
         pc = True
-    if pc:
-        total, used, free = shutil.disk_usage("\\")
+        total, used, free = shutil.disk_usage(path_to_server)
+        total, used, free = convert(total), convert(used), convert(free)
+        print("Disk Space: Total: %.2fGB Used: %.2fGB Free: %.2fGB" % (total, used, free))
 
-    # TODO: implement check for plex server status
-    return pc, plex
+        if plex_server:
+            pass # TODO: implement check for plex server status
 
-pc_stat, plex_stat = check_statuses()
+    return pc, plex, total, used, free
+
+
+pc_stat, plex_stat, total, used, free = check_statuses()
 
 # Array of Movie objects
 movies, all_movies = [], []
@@ -330,9 +333,7 @@ def show_movies(movies, all_movies, total_movies, page):
             next_btn = RoundedRectangle(SCREEN_WIDTH - 80, SCREEN_HEIGHT - 45, 75, 35, 10, (50, 180, 90), font_size=26, text='Next')
             back_btn = RoundedRectangle(SCREEN_WIDTH - 160, SCREEN_HEIGHT - 45, 75, 35, 10, (180, 50, 90), font_size=26, text='Back')
 
-
             pages = math.ceil(total_movies/6)
-
 
             if page == 2:
                 if total_movies > 12:
@@ -601,7 +602,6 @@ class CheckBox:
         if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(pygame.mouse.get_pos()) and time.clock() - self.timer > self.threshhold:
             while pygame.mouse.get_pressed()[0]:
                 pygame.event.get()
-                pygame.mouse.get_pressed()[0]
             self.active = not self.active
             self.timer = time.clock()
 
@@ -613,7 +613,6 @@ class CheckBox:
             pygame.draw.aaline(screen, (0,0,0), (self.rect.x, self.rect.y), (self.rect.x + self.size-1, self.rect.y + self.size-1))
             pygame.draw.aaline(screen, (0, 0, 0), (self.rect.x, self.rect.y + self.size-1),(self.rect.x + self.size-1, self.rect.y))
             pygame.draw.rect(screen, self.border_color, self.rect, 2)
-
 
         if self.label != '':
             screen.blit(self.text, (self.rect.x + self.size + 5, self.rect.y + (self.size - self.text.get_height())))
@@ -640,8 +639,8 @@ class ModeSelector():
         self.unselected_hover = (102, 129, 173)
 
         self.font = pygame.font.SysFont(gui_font, 24)
-        self.movie_text = self.font.render("Movies", True, (40,40,40))
-        self.tv_text = self.font.render("TV Shows", True, (40,40,40))
+        self.movie_text = self.font.render("Movies", True, (40, 40, 40))
+        self.tv_text = self.font.render("TV Shows", True, (40, 40, 40))
 
     def draw(self):
         if self.movie_mode:
@@ -756,7 +755,7 @@ class ProgressBar():
         #Outline
         pygame.draw.rect(self.surf, (30, 30, 30), self.rect, 2)
 
-        self.surf.blit(self.text, (self.rect.x + self.rect.w + 5, self.rect.y))
+        self.surf.blit(self.text, (self.rect.x + self.rect.w + 5, self.rect.y + (self.rect.h - self.text.get_height())/2 + 3))
 
 def confirmation_screen(text='', background=''):
     text = "Are you sure you want to " + text + "?"
@@ -847,7 +846,14 @@ def settings_screen():
     stat_radius = 16
     pc_status = setting_font.render("PC Status:", True, (30,30,30))
     plex_status = setting_font.render("Plex Status:", True, (30,30,30))
+    usage_text = setting_font.render("Disk Usage:", True, (30, 30, 30))
     refresh_status_btn = RoundedRectangle(int((SCREEN_WIDTH - width)/2) + width - 125, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15, 90, 30, 10, (30, 190, 95), font_size=25, text="Refresh", surf=overlay)
+
+    if pc_stat:
+        disk_usage = ProgressBar(int((SCREEN_WIDTH - width)/2) + 40 + usage_text.get_width(), int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 32 + pc_status.get_height(), int((used/total)*100), surf=overlay)
+        disk_usage.rect.h = 30
+        disk_usage.font = pygame.font.SysFont(gui_font, 30)
+        disk_usage.text = disk_usage.font.render(str(disk_usage.percentage) + "% Used", True, (30, 30, 30))
 
     while running:
         screen.blit(bg, (0, 0))
@@ -864,6 +870,8 @@ def settings_screen():
         # Status
         overlay.blit(pc_status, (int((SCREEN_WIDTH - width)/2) + 30, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 15))
         if pc_stat:
+            overlay.blit(usage_text, (int((SCREEN_WIDTH - width)/2) + 30, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + 30 + pc_status.get_height()))
+            disk_usage.draw()
             pygame.draw.circle(overlay, (20,255,20), (int((SCREEN_WIDTH - width)/2) + pc_status.get_width() + 60, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(pc_status.get_height()/2) + 15), stat_radius)
         else:
             pygame.draw.circle(overlay, (255,20,20), (int((SCREEN_WIDTH - width)/2) + pc_status.get_width() + 60, int((SCREEN_HEIGHT - height)/2) + title_text.get_height() + int(pc_status.get_height()/2) + 15), stat_radius)
