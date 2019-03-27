@@ -77,7 +77,7 @@ YIFY:
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
 path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works a qbittorent URL
-plex_server = False
+plex_server = True
 
 
 """     STATUS CHECKS       """
@@ -788,6 +788,8 @@ def confirmation_screen(text='', background=''):
         if pos[0] > body_rect.x + (300-200)/2 and pos[0] < body_rect.x + (300-200)/2 + 200 and pos[1] > body_rect.y + body_rect.h - 90 - (300-200)/2 and pos[1] < body_rect.y + body_rect.h - 90 - (300-200)/2 + 90:
             pygame.draw.rect(overlay, (100, 255, 157, 230), (body_rect.x + (300 - 200) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2, 200, 90))
             if pygame.mouse.get_pressed()[0]:
+                while pygame.mouse.get_pressed()[0]:
+                    pygame.event.get()
                 return True
         else:
             pygame.draw.rect(overlay, (80,255,137, 240), (body_rect.x + (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
@@ -797,6 +799,8 @@ def confirmation_screen(text='', background=''):
         if pos[0] > body_rect.x + body_rect.w - 200 - (300-200)/2 and pos[0] < body_rect.x + body_rect.w - 200 - (300-200)/2 + 200 and pos[1] > body_rect.y + body_rect.h - 90 - (300-200)/2 and pos[1] < body_rect.y + body_rect.h - 90 - (300-200)/2 + 90:
             pygame.draw.rect(overlay, (255, 100, 110, 230), (body_rect.x + body_rect.w - 200 - (300 - 200) / 2, body_rect.y + body_rect.h - 90 - (300 - 200) / 2, 200, 90))
             if pygame.mouse.get_pressed()[0]:
+                while pygame.mouse.get_pressed()[0]:
+                    pygame.event.get()
                 return False
         else:
             pygame.draw.rect(overlay, (255,79,90, 240), (body_rect.x + body_rect.w - 200 - (300-200)/2, body_rect.y + body_rect.h - 90 - (300-200)/2, 200, 90))
@@ -1064,7 +1068,7 @@ def recommended_movies(link, background):
     running = True
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
 
-    body_rect = pygame.Rect(10, (SCREEN_HEIGHT - 500)/2, SCREEN_WIDTH - 20, 500)
+    body_rect = pygame.Rect(10, (SCREEN_HEIGHT - 500)/2, SCREEN_WIDTH - 20, 430)
     spacing = 20
     char_lim = 20
     font = pygame.font.SysFont(gui_font, 20)
@@ -1079,15 +1083,30 @@ def recommended_movies(link, background):
             name = name.split("\n")
             text_list = []
             for word in range(len(name)):
-                text = font.render(name[word], True, (0, 0, 0))
+                text = font.render(name[word], True, (0, 0, 0), (255,255,255))
                 text_list.append(text)
-            overlay.blit(rec_movies[movie].image, (body_rect.x + (body_rect.w - (len(rec_movies)*rec_movies[movie].image.get_width()) - ((len(rec_movies)-1)*spacing))/2 + (rec_movies[movie].image.get_width() + spacing)*movie, body_rect.y + 20))
+                # Title
+                overlay.blit(text, (body_rect.x + 30 + (rec_movies[movie].image.get_width() + spacing) * movie + (rec_movies[movie].image.get_width() - text.get_width())/2, body_rect.y + 35 + rec_movies[movie].image.get_height() + 22*word))
+            # Cover
+            overlay.blit(rec_movies[movie].image, (body_rect.x + 30 + (rec_movies[movie].image.get_width() + spacing)*movie, body_rect.y + 30))
 
+            pos = pygame.mouse.get_pos()
+            if pos[0] > body_rect.x + 30 + (rec_movies[movie].image.get_width() + spacing)*movie and pos[0] < body_rect.x + 30 + (rec_movies[movie].image.get_width() + spacing)*movie + rec_movies[movie].image.get_width():
+                if pos[1] > body_rect.y + 30 and pos[1] < body_rect.y + 30 + rec_movies[movie].image.get_height():
+                    if pygame.mouse.get_pressed()[0]:
+                        while(pygame.mouse.get_pressed()[0]):
+                            pygame.event.get()
+                        running = False
+                        movie_preview(rec_movies[movie])
 
-        screen.blit(overlay, (0, 0))
+        if running:
+            screen.blit(overlay, (0, 0))
 
         clock.tick()
         for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONUP and not body_rect.collidepoint(pygame.mouse.get_pos()):
+                running = False
+
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
@@ -1146,18 +1165,21 @@ def movie_preview(movie):
         screen.blit(image, (30, bottom_text_y + 40))
 
         # Description
-        desc_text = textwrap.fill(description, 92)
-        desc_text = desc_text.split("\n")
-        screen.blit(synopsis_text, (30, bottom_text_y + 45 + size[1] ))
-        for line in range(len(desc_text)):
-            text = desc_font.render(desc_text[line], True, (30,30,30))
-            screen.blit(text, (30, bottom_text_y + 75 + size[1] + 22*line))
+
+        if description != '':
+            desc_text = textwrap.fill(description, 92)
+            desc_text = desc_text.split("\n")
+            screen.blit(synopsis_text, (30, bottom_text_y + 45 + size[1] ))
+            for line in range(len(desc_text)):
+                text = desc_font.render(desc_text[line], True, (30,30,30))
+                screen.blit(text, (30, bottom_text_y + 75 + size[1] + 22*line))
 
         # Ratings
-        for rate in range(len(rotten_imgs)):
-            rating = desc_font.render(ratings[rate], True, (30,30,30))
-            screen.blit(rotten_imgs[rate], (775 - rotten_imgs[rate].get_width() - 10, bottom_text_y + 40 + 40 * rate))
-            screen.blit(rating, (775, bottom_text_y + 40 + (rotten_imgs[rate].get_height() - rating.get_height())/2 + 1 + 40*rate))
+        if ratings:
+            for rate in range(len(rotten_imgs)):
+                rating = desc_font.render(ratings[rate], True, (30,30,30))
+                screen.blit(rotten_imgs[rate], (775 - rotten_imgs[rate].get_width() - 10, bottom_text_y + 40 + 40 * rate))
+                screen.blit(rating, (775, bottom_text_y + 40 + (rotten_imgs[rate].get_height() - rating.get_height())/2 + 1 + 40*rate))
 
         pos = pygame.mouse.get_pos()
 
@@ -1174,10 +1196,12 @@ def movie_preview(movie):
             screen.blit(trailer_text, (SCREEN_WIDTH - 120 + (100 - trailer_text.get_width()) / 2, image.get_height() + bottom_text_y + trailer_text.get_height()/2 - 2))
 
         # Recommended Movies Button
+        #FIXME: Clicks too fast. Implement while loop, go back to recommendation and break!
         if pos[0] > SCREEN_WIDTH - 200 and pos[0] < SCREEN_WIDTH - 20 and pos[1] > image.get_height() + bottom_text_y - 50 and pos[1] < image.get_height() + bottom_text_y - 10:
             pygame.draw.rect(screen, (155, 160, 255), (SCREEN_WIDTH - 200, image.get_height() + bottom_text_y - 50, 180, 40))
-            if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.3:
-                #TODO: Recommended movies screen + scraper
+            if pygame.mouse.get_pressed()[0]:
+                while pygame.mouse.get_pressed()[0]:
+                    pygame.event.get()
                 recommended_movies(movie.link, background)
         else:
             pygame.draw.rect(screen, (140, 145, 255), (SCREEN_WIDTH - 200, image.get_height() + bottom_text_y - 50, 180, 40))
