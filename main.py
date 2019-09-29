@@ -1,6 +1,7 @@
 from urllib.request import urlopen, Request
-import pygame, sys, time, io, os, textwrap, threading, webbrowser, math, shutil
+import pygame, sys, time, io, os, textwrap, threading, webbrowser, math, shutil, urllib
 from bs4 import BeautifulSoup
+from qbittorrent import Client
 
 """ URLLIB HEADER"""
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -28,6 +29,23 @@ pygame.init()
 pygame.key.set_repeat(500, 35)
 # Sets the window name
 pygame.display.set_caption("Torrent Search")
+
+# FIXME: Make it not crash if QBITTORRENT DOESNT WORK
+"""         QBITTORRENT API SETUP        """
+qb_connected = True
+try:
+    urlopen(Request('http://media-server:8080'), timeout=1)
+
+except:
+    print("Awh shit it didn't connect")
+    qb_connected = False
+
+if qb_connected:
+    print("Logging into Torrent Client")
+    qb = Client('http://media-server:8080')
+    qb.login('admin', 'password')
+
+
 
 # TODO: Probably move scrapers into a separate file
 # TODO: Make installer for Windows and Mac
@@ -70,15 +88,15 @@ YIFY:
     - Browse option to browse all movies from YIFY (latest, name, etc)
 """
 
-# TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc
+# TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc    [could make multithreaded]
 
 # Path to local server's main HDD
 #TODO: Place these in a configuration file, have them changeable through the gui
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
-path_to_server = "//MEDIA-SERVER/E/"    #TODO: Check to see if this works as a qbittorent URL
+path_to_server = "//MEDIA-SERVER/E/"
 #path_to_server = '\\'  #TODO: Remove this after testing
-plex_server = False
+plex_server = True
 convert = lambda value: value/1e9
 """     STATUS CHECKS       """
 def check_statuses():
@@ -103,7 +121,7 @@ movies, all_movies = [], []
 
 """ Link Definintions """
 """     Have to think about whether I want to list the first couple by the default order or if I want to sort by seeders from the beginning     """
-yify = lambda name: 'https://yts.am/browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
+yify = lambda name: 'https://yts.lt//browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
 
 tpb = lambda name: 'https://thepiratebay.org/search/' + name.replace(" ", "%20") + '/0/99/200'
 
@@ -919,7 +937,7 @@ def settings_screen():
     screen.blit(bg, (0, 0))
     pygame.display.update()
 
-def donwloads_screen():
+def downloads_screen():
     running = True
     bg = screen_copy
     start = time.clock()
@@ -943,6 +961,10 @@ def donwloads_screen():
     title_font = pygame.font.SysFont(gui_font, 48)
     title = title_font.render("Torrents", True, (30, 30, 30))
 
+    # TODO: Get torrent data from qbittorrent
+
+
+    # TODO: Remove ProgressBar
     prog = ProgressBar(600, 100, 93, surf=overlay)
 
     while running:
@@ -1309,7 +1331,7 @@ def user_buttons():
     # Downloads button
     download_btn.draw()
     if download_btn.onHover() and pygame.mouse.get_pressed()[0]:
-        donwloads_screen()
+        downloads_screen()
 
 torrents = []
 disp_mode = 'thumb'
