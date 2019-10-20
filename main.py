@@ -30,7 +30,7 @@ pygame.key.set_repeat(500, 35)
 # Sets the window name
 pygame.display.set_caption("Torrent Search")
 
-# FIXME: Make it not crash if QBITTORRENT DOESNT WORK
+
 """         QBITTORRENT API SETUP        """
 qb_connected = True
 try:
@@ -70,7 +70,7 @@ EZTV: Just not a good selection
                     ----------------
     - ** Check if the MEDIA-SERVER pc is available **                                                                   - DONE!
     - ** Next Check if PLEX is up and active **
-    - At the start of the program, make sure the URLs are accessible since the websites change domains often
+    - At the start of the program, make sure the URLs are accessible since the websites change domains often  
       
     - Auto-format TV show search terms (e.g. S__E__)
     - Automatically set download path when choosing to search for either a Movie of TV Show
@@ -86,12 +86,13 @@ Site Specific Features
 YIFY:
     - Resolution selector when downloading                                                                              - DONE!
     - Browse option to browse all movies from YIFY (latest, name, etc)
+    - Homepage with the top 4 movies
 """
 
 # TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc    [could make multithreaded]
 
 # Path to local server's main HDD
-#TODO: Place these in a configuration file, have them changeable through the gui
+#TODO: Place these in a configuration file, have them changeable through the gui - Possible have the URL's changeable as well
 movie_path = "Movies"   # Folder Name
 tv_path = "Tv Shows"    # Folder Name
 path_to_server = "//MEDIA-SERVER/E/"
@@ -199,29 +200,142 @@ class Torrent:
 
 
 class Download:
-    def __init__(self, x, y, w, h, name, id, progress, dl_speed, ul_speed, size, surf=screen):
+    def __init__(self, x, y, w, h, name, progress, dl_speed, ul_speed, size, eta, hash, surf=screen):
         self.rect = pygame.Rect(x, y, w, h)
         self.name = name
-        self.progress = progress
+        self.progress = float(progress)*100
+        # Speeds in MB/s
         self.dl_speed = dl_speed
         self.ul_speed = ul_speed
+        # Size in GB
         self.size = size
-        self.id = id
+        # ETA in mins
+        self.eta = eta
         self.surf = surf
-        self.progress_bar = ProgressBar(surf=self.surf)
+        self.disp_GB = False
+        self.disp_ul_MB = False
+        self.disp_dl_MB = False
+        self.hash = hash
+
+
+        # Convert bytes to GB and MB depending on size
+        if self.size >= 1073741824:
+            self.size /= 1073741824
+            self.disp_GB = True
+        else:
+            self.size /= 1048576
+
+        # Convert DL and UL speed to KB/s or MB/s depending on speed
+        if self.dl_speed > 1048576:
+            self.dl_speed /= 1048576
+            self.disp_dl_MB = True
+        else:
+            self.dl_speed /= 1024
+
+        if self.ul_speed > 1048576:
+            self.ul_speed /= 1048576
+            self.disp_ul_MB = True
+        else:
+            self.ul_speed /= 1024
+
+        # Handle infinite ETA
+        if self.eta == 8640000:
+            self.eta = float("inf")
+
+        self.progress_bar = ProgressBar(self.rect.x + self.rect.width - 200, self.rect.y + 35, self.progress, surf=self.surf)
+
         # Buttons for start/stop/pausing torrents
         self.bg_color = (120, 120, 240, 240)
 
-        #self.start_btn = RoundedRectangle
-        #self.stop_btn = RoundedRectangle
-        #self.delete_btn = RoundedRectangle
-        # TODO: Implement start/stop/delete buttons
+        self.title_font = pygame.font.SysFont(gui_font, 26)
+        self.data_font = pygame.font.SysFont(gui_font, 20)
 
     def draw(self):
         # Background
-        pygame.draw.rect(self.surf, self.bg_color, self.rect)
+        if self.onHover():
+            pygame.draw.rect(self.surf, (self.bg_color[0] - 10 ,self.bg_color[1] - 10, self.bg_color[2] - 10 ), self.rect)
+        else:
+            pygame.draw.rect(self.surf, self.bg_color, self.rect)
+
         #Border
-        pygame.draw.rect(self.surf, (30, 30, 30), self.rect, 2)
+        pygame.draw.rect(self.surf, (30, 30, 30, 220), self.rect, 2)
+
+        self.name_text = self.title_font.render(self.name, True, (30,30,30))
+
+        # Logic for drawing size (if in MB or GB)
+        #TODO: Make size, dl, ul, etc. text bolded
+        if self.disp_GB:
+            self.size_text = self.data_font.render(( 'Size: %.2f'%self.size + ' GB'), True, (30,30,30))
+        else:
+            self.size_text = self.data_font.render(('Size: %.2f'%self.size + ' MB'), True, (30, 30, 30))
+
+        if self.disp_dl_MB:
+            self.dl_speed_text = self.data_font.render(('DL: %.1f'%self.dl_speed + ' MB/s'), True, (30,30,30))
+        else:
+            self.dl_speed_text = self.data_font.render(('DL: %.1f'%self.dl_speed + ' KB/s'), True, (30, 30, 30))
+
+        if self.disp_ul_MB:
+            self.ul_speed_text = self.data_font.render(('UL: %.1f'%self.ul_speed + ' MB/s'), True, (30,30,30))
+        else:
+            self.ul_speed_text = self.data_font.render(('UL: %.1f'%self.ul_speed + ' KB/s'), True, (30, 30, 30))
+
+
+        # TODO: Add status text in small text at the bottom center of the rectangle
+
+        self.surf.blit(self.name_text, (self.rect.x + 5, self.rect.y + 5))
+        self.surf.blit(self.size_text, (self.rect.x + 5, self.rect.y + 35))
+        self.surf.blit(self.dl_speed_text, (self.rect.x + 175, self.rect.y + 35))
+        self.surf.blit(self.ul_speed_text, (self.rect.x + 350, self.rect.y + 35))
+        self.progress_bar.draw()
+
+    def torrent_control(self, bg):
+        running = True
+        start = time.clock()
+        control_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
+        control_overlay.set_alpha(150)
+        self.cotnrol_font = pygame.font.SysFont(gui_font, 22)
+        # Main Body
+        overlay_width = 600
+        overlay_height = 150
+        x = int((SCREEN_WIDTH - overlay_width) / 2)
+        y = int((SCREEN_HEIGHT - overlay_height) / 3)
+        body_rect = pygame.Rect(x, y, overlay_width, overlay_height)
+        body = RoundedRectangle(body_rect.x, body_rect.y, body_rect.w, body_rect.h, 5, (150, 0, 255, 240),
+                                hover_enabled=False, surf=control_overlay)
+        control_name_text = self.cotnrol_font.render(self.name, True, (30,30,30))
+
+        # TODO: Implement start/stop/delete buttons - Refresh all torrents when any button is pressed
+        # TODO: When Torrent is clicked, open new window with controls
+
+        # start_btn = RoundedRectangle()
+        # delete_btn = RoundedRectangle()   # This will just remove from the list
+        # pause_btn = RoundedRectangle()
+
+        while running:
+            screen.blit(bg, (0, 0))
+            body.draw()
+
+            control_overlay.blit(control_name_text, (body_rect.x + (body_rect.width - control_name_text.get_width())/2, body_rect.y + 10))
+
+            # FIXME: Download list goes opaque when control screen opens
+            screen.blit(control_overlay, (0, 0))  # DRAW ABOVE THIS LINE
+            clock.tick(FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONUP and time.clock() - start > 0.4:
+                    if not body_rect.collidepoint(pygame.mouse.get_pos()):
+                        running = False
+
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            pygame.display.update()
+
+    def onHover(self):
+        pos = pygame.mouse.get_pos()
+        if self.rect.collidepoint(pos):
+            return True
+        return False
 
 
 total_movies = 0
@@ -764,12 +878,13 @@ class ProgressBar():
         self.rect = pygame.Rect(x, y, self.width, self.height)
         self.font = pygame.font.SysFont(gui_font, 20)
         self.percentage = percentage
-        self.text = self.font.render(str(self.percentage)+"%", True, (30, 30, 30))
+        self.text = self.font.render("%.1f"%self.percentage + "%", True, (30, 30, 30))
         self.surf = surf
 
     def draw(self):
         # Progress
-        pygame.draw.rect(self.surf, (30, 240, 60), (self.rect.x, self.rect.y, int(self.rect.w * (self.percentage/100)), self.rect.h))
+        if self.percentage >0:
+            pygame.draw.rect(self.surf, (30, 240, 60), (self.rect.x, self.rect.y, int(self.rect.w * (self.percentage/100)), self.rect.h))
         #Outline
         pygame.draw.rect(self.surf, (30, 30, 30), self.rect, 2)
 
@@ -836,7 +951,7 @@ def confirmation_screen(text='', background=''):
         pygame.display.update()
 
 def settings_screen():
-    # TODO: Settings
+    # TODO: Settings        - SHOW ACTUAL USED/ TOTAL ON SERVER
     """
     Reboot Computer button,                                                                                             - Done
     Restart Plex Button                                                                                                 - Done
@@ -941,12 +1056,15 @@ def downloads_screen():
     running = True
     bg = screen_copy
     start = time.clock()
+    refresh_timer = start
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA, 32)
     overlay.set_alpha(150)
     # Main Body
     width = 700
     height = 750
-    body_rect = pygame.Rect(int((SCREEN_WIDTH-width)/2), int((SCREEN_HEIGHT-height)/2), width, height)
+    x = int((SCREEN_WIDTH-width)/2)
+    y = int((SCREEN_HEIGHT-height)/2)
+    body_rect = pygame.Rect(x, y, width, height)
     body = RoundedRectangle(body_rect.x, body_rect.y, body_rect.w, body_rect.h, 5, (120, 120, 240, 240), hover_enabled=False, surf=overlay)
     # Exit Button
     exit_size = 40
@@ -961,11 +1079,15 @@ def downloads_screen():
     title_font = pygame.font.SysFont(gui_font, 48)
     title = title_font.render("Torrents", True, (30, 30, 30))
 
-    # TODO: Get torrent data from qbittorrent
+    t_height = 70
+    downloads = []
+    torrents = qb.torrents()
 
+    for torrent in range(len(torrents)):
+        print(torrents[torrent])
+        t = torrents[torrent]
+        downloads.append(Download(x, body_rect.y + padding*2 + exit_size + (t_height-1)*torrent, width-1, t_height, t['name'], t['progress'], t['dlspeed'], t['upspeed'], t['size'], t['eta'], t['hash'], surf=overlay))
 
-    # TODO: Remove ProgressBar
-    prog = ProgressBar(600, 100, 93, surf=overlay)
 
     while running:
         screen.blit(bg, (0, 0))
@@ -974,10 +1096,27 @@ def downloads_screen():
         exit_btn.draw()
         reset_btn.draw()
         pygame.draw.line(overlay, (30, 30, 30, 220), (body_rect.x, body_rect.y + padding*2 + exit_size), (body_rect.x + body_rect.w - 1, body_rect.y + padding*2 + exit_size), 2)
-        prog.draw()
 
         overlay.blit(title, (body_rect.x + (body_rect.w - title.get_width())/2, body_rect.y + 10))
-        screen.blit(overlay, (0, 0))
+
+        for d in downloads:
+            d.draw()
+            if d.onHover() and pygame.mouse.get_pressed()[0]:
+                d.torrent_control(background)
+
+        background = overlay.copy()
+
+        screen.blit(overlay, (0, 0))    # DRAW ABOVE THIS LINE
+
+
+        if reset_btn.onHover() and pygame.mouse.get_pressed()[0] and time.clock() - refresh_timer > 0.3:
+            downloads = []
+            torrents = qb.torrents()
+            for torrent in range(len(torrents)):
+                print(torrents[torrent])
+                t = torrents[torrent]
+                downloads.append(Download(x, body_rect.y + padding * 2 + exit_size + (t_height - 1) * torrent, width - 1,t_height, t['name'], t['progress'], t['dlspeed'], t['upspeed'], t['size'], t['eta'],t['hash'], surf=overlay))
+            refresh_timer = time.clock()
 
         clock.tick(FPS)
         for event in pygame.event.get():
