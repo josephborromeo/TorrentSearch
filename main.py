@@ -18,6 +18,8 @@ FPS = 60
 SCREEN_WIDTH, SCREEN_HEIGHT = 900, 900
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Torrent Search")
+icon = pygame.image.load('resources/TorrentSearchIcon.png').convert_alpha()
+pygame.display.set_icon(icon)
 gear = pygame.image.load('resources/gear_icon.png').convert_alpha()
 
 bg_color = (250, 248, 239)
@@ -44,6 +46,7 @@ if qb_connected:
     print("Logging into Torrent Client")
     qb = Client('http://media-server:8080')
     qb.login('admin', 'password')
+
 
 
 
@@ -1405,9 +1408,19 @@ def movie_preview(movie):
                     if pygame.mouse.get_pressed()[0] and time.clock() - start > 0.5:
                         dl_confirmed = confirmation_screen('confirm this download', background)
                         if dl_confirmed:
-                            # TODO: Enable actual Downloading
-                            print(resolutions[download], links[download])
-                            running = False
+                            if qb_connected:
+                                # TODO: Enable actual Downloading
+                                print(resolutions[download], links[download])
+                                if mode_select.movie_mode:
+                                    qb.download_from_link(links[download], savepath = str(path_to_server+movie_path))
+                                else:
+                                    qb.download_from_link(links[download], savepath=str(path_to_server + tv_path))
+
+                                running = False
+                            else:
+                                print("Can't Download: Not connected to server")
+                                # TODO: When doesn't conenct to server
+
 
         if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
             time.sleep(0.05)
@@ -1454,7 +1467,10 @@ extensive_search = CheckBox(230, 57, "Extensive Search")
 fast_search = CheckBox(385, 57, "Fast Search")
 mode_select = ModeSelector(10, 53)
 setting_box = RoundedRectangle(SCREEN_WIDTH - 45, 10, 35, 35, 0, (130, 90, 95))
-download_btn = RoundedRectangle(SCREEN_WIDTH - 130, 53, 120, 30, 4, (90, 90, 176), text="Downloads", font_size=25)
+if qb_connected:
+    download_btn = RoundedRectangle(SCREEN_WIDTH - 130, 53, 120, 30, 4, (90, 90, 176), text="Downloads", font_size=25)
+else:
+    download_btn = RoundedRectangle(SCREEN_WIDTH - 130, 53, 120, 30, 4, (156, 156, 156), text="Downloads", font_size=25, hover_enabled=False)
 def user_buttons():
     if not mode_select.movie_mode:
         extensive_search.active = True
@@ -1469,7 +1485,7 @@ def user_buttons():
         settings_screen()
     # Downloads button
     download_btn.draw()
-    if download_btn.onHover() and pygame.mouse.get_pressed()[0]:
+    if download_btn.onHover() and pygame.mouse.get_pressed()[0] and qb_connected:
         downloads_screen()
 
 torrents = []
