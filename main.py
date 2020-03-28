@@ -3,8 +3,10 @@ import pygame, sys, time, io, os, textwrap, threading, webbrowser, math, shutil,
 from bs4 import BeautifulSoup
 from qbittorrent import Client
 
+
+
 """ URLLIB HEADER"""
-hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.11',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
        'Connection': 'keep-alive'}
 
@@ -62,7 +64,7 @@ YIFY: https://yts.am/browse-movies/Search%20term%20here/all/all/0/latest        
 
 Movies and TV shows
 -------------------
-TPB: https://thepiratebay.org/search/Search%20term%20here
+TPB: https://thepiratebay.org/search/Search%20term%20here               - BROKEN
 RAR: http://rarbg.to/torrents.php?search=search+term+here
 
     --- Not using KAT since you cannot easily dl magnet link ---
@@ -93,6 +95,7 @@ YIFY:
 """
 
 # TODO: Change loading sequence so the GUI loads and then checks all links and statuses, etc    [could make multithreaded]
+# TODO: make sure geckodriver is installed and placed in PATH during installation
 
 # Path to local server's main HDD
 #TODO: Place these in a configuration file, have them changeable through the gui - Possible have the URL's changeable as well
@@ -128,9 +131,8 @@ movies, all_movies = [], []
 yify = lambda name: 'https://yts.lt//browse-movies/' + name.replace(" ", "%20") + '/all/all/0/latest'
 
 tpb = lambda name: 'https://thepiratebay.org/search/' + name.replace(" ", "%20") + '/0/99/200'
-
-rar_movies = lambda name: 'http://rarbg.to/torrents.php?search=' + name.replace(" ", "+") + '&category%5B%5D=14&category%5B%5D=48&category%5B%5D=17&category%5B%5D=44&category%5B%5D=45&category%5B%5D=42&category%5B%5D=46'
-rar_tv = lambda name: 'http://rarbg.to/torrents.php?search=' + name.replace(" ", "+") + '&category%5B%5D=18&category%5B%5D=41&category%5B%5D=49'
+leetx_movies = lambda name: 'https://1337x.to/category-search/' + name.replace(" ", "%20") + '/Movies/1/'
+leetx_tv = lambda name: 'https://1337x.to/category-search/' + name.replace(" ", "%20") + '/TV/1/'
 
 
 class Movie:
@@ -445,6 +447,91 @@ def search_tpb(name):
 
     return torrents
 
+def search_leetx(name):
+    num_results = 4
+    torrents = []
+    names, sizes, seeds, leechers, magnets, urls = [], [], [], [], [], []
+    try:
+        start = time.clock()
+        req = Request(leetx_movies(str(name)), headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+
+    except:
+        print("That is an invalid URL")
+    else:
+        print("Time to retrieve Page: %.2fs" % (time.clock() - start))
+
+    # Need : title, size, magnets, seeders, leechers
+    result = soup.findAll('tr')
+    results = len(result)
+
+    if results == 0:
+        clear_movies()
+        return torrents
+    elif results-1 < num_results:
+        num_results = results-1
+
+    # limit results
+    result = result[1:num_results+1]
+
+    print("Results:", results, num_results)
+
+    #print(result[0].find('td', class_='coll-1 name').findAll('a')[-1]['href'])
+
+    for item in range(num_results):
+        print("Processing #", item+1)
+        seeds.append(result[item].find('td', class_='coll-2 seeds').text)
+        names.append(result[item].find('td', class_='coll-1 name').findAll('a')[-1].text)
+        leechers.append(result[item].find('td', class_='coll-3 leeches').text)
+        sizes.append(result[item].find('td', class_='coll-4 size mob-uploader'))    #.text.replace(str(seeds[item]), ''))
+        if sizes[item] is None:
+            sizes[item] = result[item].find('td', class_='coll-4 size mob-vip')
+
+        sizes[item] = sizes[item].text.replace(str(seeds[item]), '')
+
+        urls.append('https://1337x.to' + result[item].find('td', class_='coll-1 name').findAll('a')[-1]['href'])
+
+        req = Request(str(urls[item]), headers=hdr)
+        html = urlopen(req)
+        soup = BeautifulSoup(html.read(), 'html.parser')
+        magnets.append(soup.find('a',class_="lbf3f7b84b0d8a566de719661b8a00a771215ff14 l2a0c208273f71c56f8e85272e12c4c6eb35a1d0f le42c7dba47570564017b230ed1bac8bf3da0c3c7")['href'])
+
+        #print(soup.findAll('a', class_='l304b1f37b770005346e5fb4c94cc966328a1ff78 le0dd6b99ac398417e395cbffabb0ee95a72f814f l7f8145fd52522b6d55dc801f1c78e69e7e068e81'))
+        #print(soup.findAll('i', class_='flaticon-l1f823ab75fe1a3affc0eb9d41596c7471d5dc2cd'))
+
+
+        torrents.append(Torrent(names[item], magnets[item], str(sizes[item]), str(seeds[item]), str(leechers[item]), 'leetx'))
+
+
+
+
+    # TODO: multithread getting magnets
+    """
+    start = time.clock()
+    threads = [threading.Thread(target=get_leetx_magnet, args=(urls[i],)) for i in range(num_results)]
+    print(len(threads))
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    print("Time to get magnets: %.2fs    Time per link: %.2fs" % (
+        (time.clock() - start), ((time.clock() - start) / len(threads))))
+    """
+
+    print("Processing Time: %.2fs" %(time.clock() - start))
+
+    return torrents
+
+def get_leetx_magnet(url):
+    req = Request(str(url), headers=hdr)
+    html = urlopen(req)
+    soup = BeautifulSoup(html.read(), 'html.parser')
+    magnet = soup.find('a', class_="lbf3f7b84b0d8a566de719661b8a00a771215ff14 l2a0c208273f71c56f8e85272e12c4c6eb35a1d0f le42c7dba47570564017b230ed1bac8bf3da0c3c7")['href']
+    print(magnet)
+
+    return magnet
+
 def show_movies(movies, all_movies, total_movies, page):
     # TODO: add loading icon!
     num_cols = 3
@@ -652,7 +739,6 @@ class InputBox:
                 elif event.key == pygame.K_LEFT:
                     if self.pointer > 0:
                         self.pointer -= 1
-
                 else:
                     if self.txt_surface.get_width() < self.rect.w-45 and self.show_icon:
                         print(self.pointer, len(self.text))
@@ -660,7 +746,7 @@ class InputBox:
                             self.text = self.text[:self.pointer] + event.unicode + self.text[self.pointer:]
                         else:
                             self.text += event.unicode
-                        if event.key != pygame.K_LSHIFT and event.key != pygame.K_RSHIFT:
+                        if event.key != pygame.K_LSHIFT and event.key != pygame.K_RSHIFT and event.key != pygame.K_UP and event.key != pygame.K_DOWN:
                             self.pointer += 1
                 # Re-render the text.
                 if self.active:
@@ -711,7 +797,7 @@ class InputBox:
             self.movies, self.all_movies, self.total_movies = search_yify(self.text)
         else:
             disp_mode = 'list'
-            self.movies = search_tpb(self.text)
+            self.movies = search_leetx(self.text)
         scroll_offset = 0
         self.text = 'Search'
         self.txt_surface = self.font.render(self.text, True, self.color_inactive)
